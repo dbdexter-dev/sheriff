@@ -1,8 +1,8 @@
 SRC=$(wildcard *.c)
 OBJ=${SRC:.c=.o}
 
-CFLAGS="-g -pipe"
-LDFLAGS="-lncurses"
+CFLAGS=-g -pipe
+LDFLAGS=-lncurses
 
 all: sheriff
 

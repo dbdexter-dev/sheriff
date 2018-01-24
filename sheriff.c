@@ -23,9 +23,9 @@
 enum windows
 {
 	top_win = 0,
-	prev_win = 1,
-	curr_win = 2,
-	next_win = 3,
+	left_win = 1,
+	center_win = 2,
+	right_win = 3,
 	bot_win = 4
 };
 
@@ -37,22 +37,58 @@ typedef struct
 	int sel_idx;
 } Dirview;
 
-static void  colors_init();
+static int   deinit_windows(Dirview view[WIN_NR]);
+static void  init_colors();
+static int   init_windows(Dirview view[WIN_NR], int w, int h, float main_perc);
 static int   populate_listing(Dirview* win, char* dir);
 static void  print_status(Dirview* win, int y, int x);
 static void  resize_handler(int sig);
 static int   reverse_line_fg_bg(WINDOW* win, int y, int x);
 static int   show_listing(Dirview* win, int show_sizes);
 static int   try_highlight(Dirview* win, int idx);
-static int   windows_init(Dirview view[WIN_NR], int w, int h, float main_perc);
-static int   windows_deinit(Dirview view[WIN_NR]);
-static int   windows_prepare_for_resize(Dirview view[WIN_NR]);
 
 Dirview main_view[WIN_NR];
 
+int
+deinit_windows(Dirview view[WIN_NR])
+{
+	int i;
+
+	assert(view);
+	/* Deallocate directory listings */
+	for(i=0; i<WIN_NR; i++)
+		free_tree(view[i].tree);
+
+	for(i=0; i<WIN_NR; i++)
+		delwin(view[i].win);
+
+	return 0;
+}
+
+/* Initialize the windows that make up the main view */
+int
+init_windows(Dirview view[WIN_NR], int row, int col, float main_perc)
+{
+	int main_cols, side_cols;
+
+	if(!view)
+		return -1;
+
+	main_cols = col * main_perc;
+	side_cols = (col - main_cols) / 2;
+
+	view[top_win].win = newwin(1, col, 0, 0);
+	view[bot_win].win = newwin(1, col, row - 1, 0);
+	view[left_win].win = newwin(row - 2, side_cols, 1, 1);
+	view[center_win].win = newwin(row - 2, main_cols, 1, 1 + side_cols);
+	view[right_win].win = newwin(row - 2, side_cols, 1, 1 + side_cols + main_cols);
+
+	return 0;
+}
+
 /* Initialize color pairs */
 void
-colors_init(void)
+init_colors(void)
 {
 	init_pair(PAIR_BLUE_DEF, COLOR_BLUE, -1);
 	init_pair(PAIR_GREEN_DEF, COLOR_GREEN, -1);
@@ -106,18 +142,20 @@ populate_listing(Dirview* win, char* dir)
 void  
 resize_handler(int sig)
 {
-	int nr, nc;
+	int i, nr, nc;
 
-	windows_prepare_for_resize(main_view);
+	for(i=0; i<WIN_NR; i++)
+		delwin(main_view[i].win);
+
 	endwin();
 
 	initscr();
 	getmaxyx(stdscr, nr, nc);
-	windows_init(main_view, nr, nc, MAIN_PERC);
+	init_windows(main_view, nr, nc, MAIN_PERC);
 
 	print_status(main_view + top_win, 0, 0);
-	show_listing(main_view + prev_win, 0);
-	show_listing(main_view + curr_win, 1);
+	show_listing(main_view + left_win, 0);
+	show_listing(main_view + center_win, 1);
 }
 
 int
@@ -215,53 +253,6 @@ try_highlight(Dirview* win, int idx)
 
 	return win->sel_idx;
 }
-/* Initialize the windows that make up the main view */
-int
-windows_init(Dirview view[WIN_NR], int row, int col, float main_perc)
-{
-	int main_cols, side_cols;
-
-	if(!view)
-		return -1;
-
-	main_cols = col * main_perc;
-	side_cols = (col - main_cols) / 2;
-
-	view[top_win].win = newwin(1, col, 0, 0);
-	view[bot_win].win = newwin(1, col, row - 1, 0);
-	view[prev_win].win = newwin(row - 2, side_cols, 1, 1);
-	view[curr_win].win = newwin(row - 2, main_cols, 1, 1 + side_cols);
-	view[next_win].win = newwin(row - 2, side_cols, 1, 1 + side_cols + main_cols);
-
-	return 0;
-}
-
-int
-windows_deinit(Dirview view[WIN_NR])
-{
-	int i;
-
-	assert(view);
-	/* Deallocate directory listings */
-	for(i=0; i<WIN_NR; i++)
-		free_tree(view[i].tree);
-
-	windows_prepare_for_resize(view);
-	return 0;
-}
-
-int
-windows_prepare_for_resize(Dirview view[WIN_NR])
-{
-	int i;
-
-	assert(view);
-	/* Deallocate directory listings */
-	for(i=0; i<WIN_NR; i++)
-		delwin(view[i].win);
-
-	return 0;
-}
 
 int
 main(int argc, char* argv[])
@@ -284,9 +275,9 @@ main(int argc, char* argv[])
 	getmaxyx(stdscr, max_row, max_col);
 
 	/* Initialize colorschemes */
-	colors_init();
+	init_colors();
 	/* Initialize windows */
-	windows_init(main_view, max_row, max_col, MAIN_PERC);
+	init_windows(main_view, max_row, max_col, MAIN_PERC);
 
 	for(i=0; i<WIN_NR; i++)
 		main_view[i].sel_idx = 0;
@@ -294,21 +285,21 @@ main(int argc, char* argv[])
 	refresh();
 
 	print_status(main_view + top_win, 0, 0);
-	populate_listing(main_view + prev_win, "../");
-	populate_listing(main_view + curr_win, "./");
+	populate_listing(main_view + left_win, "../");
+	populate_listing(main_view + center_win, "./");
 
-	show_listing(main_view + prev_win, false);
-	show_listing(main_view + curr_win, false);
+	show_listing(main_view + left_win, false);
+	show_listing(main_view + center_win, false);
 
-	while((ch = wgetch(main_view[curr_win].win)) != 'q')
+	while((ch = wgetch(main_view[center_win].win)) != 'q')
 	{
 		switch(ch)
 		{
 			case 'j':
-				cur_highlight = try_highlight(main_view + curr_win, ++cur_highlight);
+				cur_highlight = try_highlight(main_view + center_win, ++cur_highlight);
 				break;
 			case 'k':
-				cur_highlight = try_highlight(main_view + curr_win, --cur_highlight);
+				cur_highlight = try_highlight(main_view + center_win, --cur_highlight);
 				break;
 			case 'h':
 				break;
@@ -319,7 +310,7 @@ main(int argc, char* argv[])
 		}
 	}
 	/* Terminate ncurses session */
-	windows_deinit(main_view);
+	deinit_windows(main_view);
 	endwin();
 	return 0;
 }

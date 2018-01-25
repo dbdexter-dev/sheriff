@@ -1,5 +1,5 @@
-#ifndef __DIR_H
-#define __DIR_H
+#ifndef DIR_H
+#define DIR_H
 
 #include <fcntl.h>
 #include <sys/stat.h>

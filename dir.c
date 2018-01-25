@@ -66,7 +66,7 @@ try_select(struct direntry* direntry, int idx)
 {
 	int i;
 
-	if(idx > direntry->tree_size)
+	if(idx >= direntry->tree_size)
 		direntry->sel_idx = direntry->tree_size - 1;
 	else if (idx < 0)
 		direntry->sel_idx = 0;
@@ -153,6 +153,7 @@ free_tree(fileentry_t* list)
 
 /* XXX XXX XXX XXX XXX XXX XXX XXX XXX */
 /* Will exchange a->next with b->next */
+/* Edge cases are a bitch */
 void
 list_xchg(fileentry_t* a, fileentry_t* b)
 {
@@ -168,7 +169,6 @@ list_xchg(fileentry_t* a, fileentry_t* b)
 	tmp = a->next->next;
 	a->next->next = b->next->next;
 	b->next->next = tmp;
-	return;
 }
 
 /* Alphabetically sort a directory listing, directories first

@@ -12,12 +12,12 @@
 #include "backend.h"
 #include "dir.h"
 #include "utils.h"
-#include "config.h"
 
 #define HUMANSIZE_LEN 6
 #define MAIN_PERC 0.6
 #define MAXHOSTNLEN 32
 #define MAXDATELEN 18
+#define MAXCMDLEN 128
 #define WIN_NR 5
 
 #define PAIR_BLUE_DEF 1
@@ -25,6 +25,8 @@
 #define PAIR_WHITE_DEF 3
 #define PAIR_CYAN_DEF 4
 #define PAIR_YELLOW_DEF 5
+
+#define LENGTH(X) sizeof(X) / sizeof(X[0])
 
 enum windows
 {
@@ -35,7 +37,14 @@ enum windows
 	bot_win = 4
 };
 
+typedef union
+{
+	unsigned int i;
+	void* v;
+} Arg;
+
 static int   deinit_windows(Dirview view[WIN_NR]);
+static void  dialog_open_with(Dirview* view, char* fname);
 static void  init_colors();
 static int   init_windows(Dirview view[WIN_NR], int w, int h, float main_perc);
 static void  print_status_bottom(Dirview* win);
@@ -44,10 +53,72 @@ static void  resize_handler(int sig);
 static int   refresh_listing(Dirview* win, int show_sizes);
 static int   try_highlight(Dirview* win, int idx);
 
+static void  enter_directory(const Arg* arg);
+static void  exit_directory(const Arg* arg);
+static void  open_with(const Arg* arg);
+static void  rel_highlight(const Arg* arg);
+
 /* This is the only variable I can't make non-global
  * since it is needed by the SIGWINCH handler
  */
 Dirview main_view[WIN_NR];
+
+/* Keybind handlers {{{*/
+void
+enter_directory(const Arg* arg)
+{
+	int is_file;
+	Arg open_arg;
+
+	is_file = navigate_fwd(main_view + left_win, main_view + center_win, main_view + right_win);
+	if(is_file)
+	{
+		open_arg.v = (void*) main_view[center_win].dir;
+		open_with(&open_arg);
+	}
+	else
+	{
+		associate_dir(main_view + top_win, main_view[center_win].dir);
+		associate_dir(main_view + bot_win, main_view[center_win].dir);
+		try_highlight(main_view + center_win, main_view[center_win].dir->sel_idx);
+		refresh_listing(main_view + left_win, 0);
+		refresh_listing(main_view + center_win, 1);
+	}
+}
+
+void
+exit_directory(const Arg* arg)
+{
+	navigate_back(main_view + left_win, main_view + center_win, main_view + right_win);
+	associate_dir(main_view + top_win, main_view[center_win].dir);
+	associate_dir(main_view + bot_win, main_view[center_win].dir);
+	try_highlight(main_view + center_win, main_view[center_win].dir->sel_idx);
+	refresh_listing(main_view + left_win, 0);
+	refresh_listing(main_view + center_win, 1);
+}
+
+void
+open_with(const Arg* arg)
+{
+	struct direntry* dir = arg->v;
+	char* fname;
+
+	fname = safealloc(sizeof(char) * (strlen(dir->path) + strlen(dir->sel->name) + 1 + 1));
+	sprintf(fname, "%s/%s", dir->path, dir->sel->name);
+
+	dialog_open_with(main_view + bot_win, fname);
+	free(fname);
+}
+
+void
+rel_highlight(const Arg* arg)
+{
+	int cur_pos;
+	cur_pos = main_view[center_win].dir->sel_idx;
+	try_highlight(main_view + center_win, cur_pos + arg->i);
+}
+/*}}}*/
+#include "config.h"
 
 /* Deinitialize windows, right before exiting.
  * This deallocates all memory dedicated to fileentry_t* lists
@@ -69,6 +140,38 @@ deinit_windows(Dirview view[WIN_NR])
 		delwin(view[i].win);
 
 	return 0;
+}
+
+/* Show a dialog asking for a command to open a file with */
+void
+dialog_open_with(Dirview* win, char* fname)
+{
+	pid_t pid;
+	char command[MAXCMDLEN+1];
+
+	wclear(win->win);
+	wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
+	mvwprintw(win->win, 0, 0, "open_with: ");
+	echo();
+	curs_set(1);
+	wgetnstr(win->win, command, MAXCMDLEN);
+	def_prog_mode();
+	endwin();
+
+	if(!(pid = fork()))
+	{
+		execlp(command, command, fname, NULL);
+		exit(0);
+	}
+	else
+		waitpid(pid);
+
+	reset_prog_mode();
+	noecho();
+	curs_set(0);
+	wclear(win->win);
+
+	refresh();
 }
 
 /* Initialize the windows that make up the main view */
@@ -111,14 +214,12 @@ print_status_bottom(Dirview* win)
 {
 	int cols;
 	char mode[] = "----------";
-	char humansize[HUMANSIZE_LEN+1];
 	char last_modified[MAXDATELEN+1];
 	struct tm* mtime;
 
 	cols = getmaxx(win->win);
 
 	octal_to_str(win->dir->sel->mode, mode);
-	tohuman(win->dir->sel->size, humansize);
 	mtime = localtime(&(win->dir->sel->lastchange));
 	strftime(last_modified, MAXDATELEN, "%F %R", mtime);
 
@@ -127,7 +228,6 @@ print_status_bottom(Dirview* win)
 	wattrset(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
 	// TODO: mode to string
 	mvwprintw(win->win, 0, 0, "%s  %d  %d  %s", mode, win->dir->sel->uid, win->dir->sel->gid, last_modified);
-	mvwprintw(win->win, 0, cols - 7, "%6s", humansize);
 	wrefresh(win->win);
 }
 
@@ -281,8 +381,12 @@ refresh_listing(Dirview* win, int show_sizes)
 int
 try_highlight(Dirview* win, int idx)
 {
-	int i, savedrow, savedcol;
+	int savedrow, savedcol;
 	attr_t attr;
+
+	/* Return if we are past the end of the screen */
+	if(win->dir->sel_idx > getmaxx(win->win))
+		return 0;
 
 	assert(win);
 	assert(win->win);
@@ -310,7 +414,7 @@ try_highlight(Dirview* win, int idx)
 int
 main(int argc, char* argv[])
 {
-	int max_row, max_col;
+	int i, max_row, max_col;
 	int tree_needs_update;
 	char ch;
 	char *tmpcat, *center_wd, *center_selected;
@@ -351,68 +455,34 @@ main(int argc, char* argv[])
 
 	tree_needs_update = 0;
 
+	/* Main control loop */
 	while((ch = wgetch(main_view[center_win].win)) != 'q')
 	{
-		switch(ch)
+		/* Call the function associated with the key pressed */
+		for(i=0; i<LENGTH(keys); i++)
+			if(ch == keys[i].key)
+				keys[i].funct(&keys[i].arg);
+
+		assert(!free_listing(&(main_view[right_win].dir)));
+		if(main_view[center_win].dir->sel->type == DT_DIR)
 		{
-			case 'j':
-				cur_highlight = try_highlight(main_view + center_win, ++cur_highlight);
-				tree_needs_update = 1;
-				break;
-			case 'k':
-				cur_highlight = try_highlight(main_view + center_win, --cur_highlight);
-				tree_needs_update = 1;
-				break;
-			case 'h':
-				navigate_back(main_view + left_win, main_view + center_win, main_view + right_win);
-				associate_dir(main_view + top_win, main_view[center_win].dir);
-				associate_dir(main_view + bot_win, main_view[center_win].dir);
+			center_wd = main_view[center_win].dir->path;
+			center_selected = main_view[center_win].dir->sel->name;
 
-				cur_highlight = main_view[center_win].dir->sel_idx;
+			assert(center_wd);
+			assert(center_selected);
 
-				refresh_listing(main_view + left_win, 0);
-				refresh_listing(main_view + center_win, 1);
+			tmpcat = safealloc(sizeof(char) * (strlen(center_wd) + strlen(center_selected) + 1 + 1));
+			sprintf(tmpcat, "%s/%s", center_wd, center_selected);
 
-				tree_needs_update = 1;
-				break;
-			case 'l':
-				navigate_fwd(main_view + left_win, main_view + center_win, main_view + right_win);
-				associate_dir(main_view + top_win, main_view[center_win].dir);
-				associate_dir(main_view + bot_win, main_view[center_win].dir);
+			init_listing(&(main_view[right_win].dir), tmpcat);
 
-				cur_highlight = 0;
-
-				refresh_listing(main_view + left_win, 0);
-				refresh_listing(main_view + center_win, 1);
-
-				tree_needs_update = 1;
-				break;
-			default:
-				break;
+			free(tmpcat);
 		}
-		if(tree_needs_update)
-		{
-			assert(!free_listing(&(main_view[right_win].dir)));
-			if(main_view[center_win].dir->sel->type == DT_DIR)
-			{
-				center_wd = main_view[center_win].dir->path;
-				center_selected = main_view[center_win].dir->sel->name;
-
-				assert(center_wd);
-				assert(center_selected);
-
-				tmpcat = safealloc(sizeof(char) * (strlen(center_wd) + strlen(center_selected) + 1 + 1));
-				sprintf(tmpcat, "%s/%s", center_wd, center_selected);
-
-				init_listing(&(main_view[right_win].dir), tmpcat);
-
-				free(tmpcat);
-			}
-			refresh_listing(main_view + right_win, 0);
-			print_status_bottom(main_view + bot_win);
-			print_status_top(main_view + top_win);
-			tree_needs_update = 0;
-		}
+		refresh_listing(main_view + right_win, 0);
+		print_status_bottom(main_view + bot_win);
+		print_status_top(main_view + top_win);
+		tree_needs_update = 0;
 	}
 	/* Terminate ncurses session */
 	deinit_windows(main_view);

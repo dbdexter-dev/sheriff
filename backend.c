@@ -34,7 +34,7 @@ navigate_fwd(Dirview* left, Dirview* center, Dirview* right)
 {
 	char *tmppath;
 
-	if(right->dir->sel->type != DT_DIR)
+	if(center->dir->sel->type != DT_DIR)
 		return 1;
 
 	assert(!free_listing(&left->dir));

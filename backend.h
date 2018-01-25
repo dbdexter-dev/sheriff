@@ -1,5 +1,5 @@
-#ifndef __BACKEND_H
-#define __BACKEND_H
+#ifndef BACKEND_H
+#define BACKEND_H
 
 #include <ncurses.h>
 #include "dir.h"

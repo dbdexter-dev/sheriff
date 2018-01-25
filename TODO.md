@@ -1,9 +1,8 @@
 # Sheriff.c
 * Implement directory navigation
-* Implement directory preview in the right pane
-* Implement bottom status bar (last modified)
 * Implement preview window
 * Implement config.h keybinding configuration
+* Implement window scrolling
 * Reduce the number of #define directives in sheriff.c
 * Enable top bar truncation a la fish
 * Preserve highlighting through SIGWINCHes

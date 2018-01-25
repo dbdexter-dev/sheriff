@@ -17,8 +17,16 @@ typedef struct fileentry
 	struct fileentry* next;
 } fileentry_t;
 
-fileentry_t* dirlist(char* path);
-int sort_tree(fileentry_t* tree);
-int free_tree(fileentry_t* tree);
+struct direntry
+{
+	char* path;             /* Path this struct represents */
+	fileentry_t* tree;      /* Linked list of all files */
+	int tree_size;          /* Number of entries in the list */
+	fileentry_t* sel;       /* Selected entry shorthand */
+	int sel_idx;            /* Selected entry index */
+};
+
+int init_listing(struct direntry** direntry, char* path);
+int free_listing(struct direntry** direntry);
 
 #endif

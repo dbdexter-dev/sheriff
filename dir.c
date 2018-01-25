@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -10,8 +11,52 @@
 #include "utils.h"
 
 #include <stdio.h>
+#define _GNU_SOURCE
 
-static void list_xchg(fileentry_t* a, fileentry_t* b);
+static fileentry_t* dirlist(char* path);
+static void         free_tree(fileentry_t* tree);
+static void         list_xchg(fileentry_t* a, fileentry_t* b);
+static int          sort_tree(fileentry_t* tree);
+
+/* Free memory associated with a tree */
+int
+free_listing(struct direntry** direntry)
+{
+	if(!(*direntry))
+		return 0;
+
+	if(!(*direntry)->tree || !(*direntry)->path)
+		return 1;
+
+	free_tree((*direntry)->tree);
+	free((*direntry)->path);
+	free((*direntry));
+	*direntry = NULL;
+
+	return 0;
+}
+
+/* Populate a direntry structure with a directory listing */
+int
+init_listing(struct direntry** direntry, char* path)
+{
+	assert(direntry);
+	assert(path);
+
+	*direntry = safealloc(sizeof(struct direntry));
+	fileentry_t* tmp;
+	/* Save the parent workdir */
+	(*direntry)->path = realpath(path, NULL);
+
+	/* Populate and sort */
+	(*direntry)->tree = dirlist(path);
+	sort_tree((*direntry)->tree);
+	(*direntry)->sel_idx = 0;
+
+	/* Find the tree size */
+	for(tmp = (*direntry)->tree; tmp != NULL; tmp=tmp->next, (*direntry)->tree_size++);
+	return 0;
+}
 
 /* Populate a fileentry_t list with a directory listing */
 fileentry_t*
@@ -67,9 +112,10 @@ dirlist(char* path)
 	return head;
 }
 /* Free a fileentry_t linked list */
-int
+void
 free_tree(fileentry_t* list)
 {
+	int status;
 	fileentry_t* next;
 
 	while(list != NULL)
@@ -78,8 +124,26 @@ free_tree(fileentry_t* list)
 		free(list);
 		list = next;
 	}
+}
 
-	return 0;
+/* XXX XXX XXX XXX XXX XXX XXX XXX XXX */
+/* Will exchange a->next with b->next */
+void
+list_xchg(fileentry_t* a, fileentry_t* b)
+{
+	fileentry_t* tmp;
+
+	assert(a->next);
+	assert(b->next);
+
+	tmp = a->next;
+	a->next = b->next;
+	b->next = tmp;
+
+	tmp = a->next->next;
+	a->next->next = b->next->next;
+	b->next->next = tmp;
+	return;
 }
 
 /* Alphabetically sort a directory listing, directories first
@@ -91,7 +155,6 @@ sort_tree(fileentry_t* tree)
 	int done;
 	fileentry_t* tmpptr, *dirptr, *orderedptr, *list_begin;
 	fileentry_t* prevtmp, *prevdir;
-	char* fname;
 
 	if(!tree)
 		die("Cannot sort an empty tree!");
@@ -157,25 +220,4 @@ sort_tree(fileentry_t* tree)
 			}
 	}
 	return 0;
-}
-
-
-/* XXX XXX XXX XXX XXX XXX XXX XXX XXX */
-/* Will exchange a->next with b->next */
-void
-list_xchg(fileentry_t* a, fileentry_t* b)
-{
-	fileentry_t* tmp;
-
-	assert(a->next);
-	assert(b->next);
-
-	tmp = a->next;
-	a->next = b->next;
-	b->next = tmp;
-
-	tmp = a->next->next;
-	a->next->next = b->next->next;
-	b->next->next = tmp;
-	return;
 }

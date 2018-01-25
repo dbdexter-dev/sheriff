@@ -49,8 +49,8 @@ static int   deinit_windows(Dirview view[WIN_NR]);
 static void  init_colors();
 static int   init_windows(Dirview view[WIN_NR], int w, int h, float main_perc);
 static int   populate_listing(Dirview* win, char* dir);
-static void  print_status_bottom(Dirview* win, int y, int x);
-static void  print_status_top(Dirview* win, int y, int x);
+static void  print_status_bottom(Dirview* win);
+static void  print_status_top(Dirview* win);
 static void  resize_handler(int sig);
 static int   set_direntry(Dirview* win, struct direntry* dir);
 static int   show_listing(Dirview* win, int show_sizes);
@@ -122,20 +122,25 @@ init_colors(void)
  * Format: <mode> <uid> <gid> <last_modified> --- <size>
  */
 void
-print_status_bottom(Dirview* win, int y, int x)
+print_status_bottom(Dirview* win)
 {
-	int i;
+	int i, rows, cols;
 	char mode[] = "----------";
+	char humansize[6+1];
 	fileentry_t* cur_file;
+
+	getmaxyx(win->win, rows, cols);
 
 	for(cur_file = win->dir->tree, i=0; i<win->dir->sel_idx; i++, cur_file = cur_file->next);
 
 	octal_to_str(cur_file->mode, mode);
+	tohuman(cur_file->size, humansize);
 
 	assert(win->win);
 	wattrset(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
 	// TODO: mode to string
-	mvwprintw(win->win, y, x, "%s %d %d", mode, cur_file->uid, cur_file->gid);
+	mvwprintw(win->win, 0, 0, "%s %d %d", mode, cur_file->uid, cur_file->gid);
+	mvwprintw(win->win, 0, cols - 7, "%6s", humansize);
 	wrefresh(win->win);
 }
 
@@ -143,7 +148,7 @@ print_status_bottom(Dirview* win, int y, int x)
  * Format: <user>@<host> $PWD/<selected entry>
  */
 void
-print_status_top(Dirview* win, int y, int x)
+print_status_top(Dirview* win)
 {
 	char* username;
 	char* workdir;
@@ -158,7 +163,7 @@ print_status_top(Dirview* win, int y, int x)
 	assert(win->win);
 
 	wattrset(win->win, A_BOLD | COLOR_PAIR(PAIR_BLUE_DEF));
-	mvwprintw(win->win, y, x, "%s@%s", username, hostname);
+	mvwprintw(win->win, 0, 0, "%s@%s", username, hostname);
 	wattron(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
 	wprintw(win->win, " %s/", workdir);
 /*	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF)); */
@@ -224,9 +229,10 @@ resize_handler(int sig)
 	status |= mvwin(main_view[right_win].win, 1, side_cols + main_cols);
 	assert(!status);
 
-	print_status_top(main_view + top_win, 0, 0);
+	print_status_top(main_view + top_win);
 	show_listing(main_view + left_win, 0);
 	show_listing(main_view + center_win, 1);
+	print_status_bottom(main_view + bot_win);
 }
 
 /* Set the direntry associated with a window to the specified pointer */
@@ -244,6 +250,7 @@ show_listing(Dirview* win, int show_sizes)
 {
 	int maxrows, maxcols, rowcount;
 	char* tmpstring;
+	char humansize[6+1];
 	const fileentry_t* tmptree;
 
 	assert(win->win);
@@ -291,9 +298,12 @@ show_listing(Dirview* win, int show_sizes)
 		}
 		else
 		{
+			tohuman(tmptree->size, humansize);
+			strchomp(tmptree->name, tmpstring, maxcols - 1 - 7);
 			/* TODO: print file size if we're asked to
 			 * So, chomp string to maxcols - 1 - (space reserved to size) */
-			wprintw(win->win, "%s", tmptree->name);
+			wprintw(win->win, "%s", tmpstring);
+			mvwprintw(win->win, rowcount, maxcols - 7, "%6s", humansize);
 			wprintw(win->win, "\n");
 		}
 		/* TODO: makes the first row disappear */
@@ -381,10 +391,10 @@ main(int argc, char* argv[])
 	populate_listing(main_view + center_win, "./");
 
 
-	print_status_top(main_view + top_win, 0, 0);
-	print_status_bottom(main_view + bot_win, 0, 0);
-	show_listing(main_view + left_win, false);
-	show_listing(main_view + center_win, false);
+	print_status_top(main_view + top_win);
+	print_status_bottom(main_view + bot_win);
+	show_listing(main_view + left_win, 0);
+	show_listing(main_view + center_win, 1);
 
 	while((ch = wgetch(main_view[center_win].win)) != 'q')
 	{
@@ -403,7 +413,7 @@ main(int argc, char* argv[])
 			default:
 				break;
 		}
-		print_status_bottom(main_view + bot_win, 0, 0);
+		print_status_bottom(main_view + bot_win);
 	}
 	/* Terminate ncurses session */
 	deinit_windows(main_view);

@@ -79,19 +79,27 @@ void
 tohuman(unsigned long bytes, char* human)
 {
 	const char suffix[] = "BKMGTPE";
+	float fbytes;
 	int exp_3;
 
 	assert(human);
 
 	/* Integer divide until the last moment */
-	for(exp_3 = 0; bytes > 1000000; bytes /= 1000);
-
-	sprintf(human, "%.2f %c", bytes / 1000.0, suffix[exp_3]);
+	for(exp_3 = 0, fbytes = bytes; fbytes > 1000; fbytes /= 1000, exp_3++);
+	if(fbytes > 100)
+		sprintf(human, "%3.f %c", fbytes, suffix[exp_3]);
+	else if(fbytes > 10)
+		sprintf(human, "%3.1f %c", fbytes, suffix[exp_3]);
+	else
+		sprintf(human, "%3.2f %c", fbytes, suffix[exp_3]);
 }
 
 int
 wdshorten(const char* src, char* dest, const unsigned destsize)
 {
+	assert(src);
+	assert(dest);
+
 	int count;
 	if(src == NULL || dest == NULL)
 		return -1;

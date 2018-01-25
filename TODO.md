@@ -1,8 +1,7 @@
 # Sheriff.c
 * Implement directory navigation
-* Show file size on the right side of the window
 * Implement directory preview in the right pane
-* Implement bottom status bar (last modified, overall directory size)
+* Implement bottom status bar (last modified)
 * Implement preview window
 * Implement config.h keybinding configuration
 * Reduce the number of #define directives in sheriff.c

@@ -28,5 +28,6 @@ struct direntry
 
 int init_listing(struct direntry** direntry, char* path);
 int free_listing(struct direntry** direntry);
+int try_select(struct direntry* direntry, int idx);
 
 #endif

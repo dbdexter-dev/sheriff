@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include "backend.h"
 #include "dir.h"
 #include "utils.h"
 #include "config.h"
@@ -34,20 +35,13 @@ enum windows
 	bot_win = 4
 };
 
-
-typedef struct
-{
-	WINDOW* win;            /* Ncurses window being managed */
-	struct direntry* dir;   /* Directory associated with the view */
-} Dirview;
-
 static int   deinit_windows(Dirview view[WIN_NR]);
 static void  init_colors();
 static int   init_windows(Dirview view[WIN_NR], int w, int h, float main_perc);
 static void  print_status_bottom(Dirview* win);
 static void  print_status_top(Dirview* win);
 static void  resize_handler(int sig);
-static int   show_listing(Dirview* win, int show_sizes);
+static int   refresh_listing(Dirview* win, int show_sizes);
 static int   try_highlight(Dirview* win, int idx);
 
 /* This is the only variable I can't make non-global
@@ -69,7 +63,7 @@ deinit_windows(Dirview view[WIN_NR])
 	 * inherit the center_win path, so there's no need to free those two */
 	for(i=0; i<WIN_NR; i++)
 		if(view[i].dir && i != top_win && i != bot_win)
-			free_listing(&view[i].dir);
+			assert(!free_listing(&view[i].dir));
 
 	for(i=0; i<WIN_NR; i++)
 		delwin(view[i].win);
@@ -115,14 +109,13 @@ init_colors(void)
 void
 print_status_bottom(Dirview* win)
 {
-	int i, rows, cols;
+	int cols;
 	char mode[] = "----------";
 	char humansize[HUMANSIZE_LEN+1];
 	char last_modified[MAXDATELEN+1];
 	struct tm* mtime;
 
-	getmaxyx(win->win, rows, cols);
-
+	cols = getmaxx(win->win);
 
 	octal_to_str(win->dir->sel->mode, mode);
 	tohuman(win->dir->sel->size, humansize);
@@ -199,15 +192,15 @@ resize_handler(int sig)
 	clear();
 
 	print_status_top(main_view + top_win);
-	show_listing(main_view + left_win, 0);
-	show_listing(main_view + center_win, 1);
-	show_listing(main_view + right_win, 0);
+	refresh_listing(main_view + left_win, 0);
+	refresh_listing(main_view + center_win, 1);
+	refresh_listing(main_view + right_win, 0);
 	print_status_bottom(main_view + bot_win);
 }
 
 /* Render a directory listing on a window */
 int
-show_listing(Dirview* win, int show_sizes)
+refresh_listing(Dirview* win, int show_sizes)
 {
 	int maxrows, maxcols, rowcount;
 	char* tmpstring;
@@ -302,33 +295,25 @@ try_highlight(Dirview* win, int idx)
 	wchgat(win->win, -1, attr, PAIR_NUMBER(attr), NULL);
 
 	/* Move to the specified line */
-	if(idx > win->dir->tree_size - 1)
-		win->dir->sel_idx = win->dir->tree_size - 1;
-	else if (idx < 0)
-		win->dir->sel_idx = 0;
-	else
-		win->dir->sel_idx = idx;
+	idx = try_select(win->dir, idx);
 
 	/* Turn on highlighting for this line */
 	attr = (mvwinch(win->win, win->dir->sel_idx, 0) & (A_COLOR | A_ATTRIBUTES)) | A_REVERSE;
 	wchgat(win->win, -1, attr, PAIR_NUMBER(attr), NULL);
 
-	/* Update the pointer to the currently selected entry */
-	for(i=0, win->dir->sel = win->dir->tree; i<win->dir->sel_idx; i++, win->dir->sel = win->dir->sel->next);
-
 	/* Restore cursor position */
 	wmove(win->win, savedrow, savedcol);
 	/* Return the highlighted line number */
-	return win->dir->sel_idx;
+	return idx;
 }
 
 int
 main(int argc, char* argv[])
 {
 	int max_row, max_col;
-	int i, tree_needs_update;
+	int tree_needs_update;
 	char ch;
-	char tmpcat[512];
+	char *tmpcat, *center_wd, *center_selected;
 	int cur_highlight = 0;
 
 	/* Initialize ncurses */
@@ -346,6 +331,7 @@ main(int argc, char* argv[])
 	/* Initialize the two main directory listings */
 	init_listing(&(main_view[left_win].dir), "../");
 	init_listing(&(main_view[center_win].dir), "./");
+	init_listing(&(main_view[right_win].dir), "./");
 
 	/* Associate status bars to the main direntry */
 	main_view[top_win].dir = main_view[center_win].dir;
@@ -357,12 +343,14 @@ main(int argc, char* argv[])
 	init_windows(main_view, max_row, max_col, MAIN_PERC);
 	refresh();
 
-	show_listing(main_view + left_win, 0);
-	show_listing(main_view + center_win, 1);
+	refresh_listing(main_view + left_win, 0);
+	refresh_listing(main_view + center_win, 1);
+	refresh_listing(main_view + right_win, 0);
 	print_status_top(main_view + top_win);
 	print_status_bottom(main_view + bot_win);
 
 	tree_needs_update = 0;
+
 	while((ch = wgetch(main_view[center_win].win)) != 'q')
 	{
 		switch(ch)
@@ -376,21 +364,51 @@ main(int argc, char* argv[])
 				tree_needs_update = 1;
 				break;
 			case 'h':
+				navigate_back(main_view + left_win, main_view + center_win, main_view + right_win);
+				associate_dir(main_view + top_win, main_view[center_win].dir);
+				associate_dir(main_view + bot_win, main_view[center_win].dir);
+
+				cur_highlight = main_view[center_win].dir->sel_idx;
+
+				refresh_listing(main_view + left_win, 0);
+				refresh_listing(main_view + center_win, 1);
+
+				tree_needs_update = 1;
 				break;
 			case 'l':
+				navigate_fwd(main_view + left_win, main_view + center_win, main_view + right_win);
+				associate_dir(main_view + top_win, main_view[center_win].dir);
+				associate_dir(main_view + bot_win, main_view[center_win].dir);
+
+				cur_highlight = 0;
+
+				refresh_listing(main_view + left_win, 0);
+				refresh_listing(main_view + center_win, 1);
+
+				tree_needs_update = 1;
 				break;
 			default:
 				break;
 		}
 		if(tree_needs_update)
 		{
-			free_listing(&(main_view[right_win].dir));
+			assert(!free_listing(&(main_view[right_win].dir)));
 			if(main_view[center_win].dir->sel->type == DT_DIR)
 			{
-				snprintf(tmpcat, 512, "%s/%s", main_view[center_win].dir->path, main_view[center_win].dir->sel->name);
+				center_wd = main_view[center_win].dir->path;
+				center_selected = main_view[center_win].dir->sel->name;
+
+				assert(center_wd);
+				assert(center_selected);
+
+				tmpcat = safealloc(sizeof(char) * (strlen(center_wd) + strlen(center_selected) + 1 + 1));
+				sprintf(tmpcat, "%s/%s", center_wd, center_selected);
+
 				init_listing(&(main_view[right_win].dir), tmpcat);
+
+				free(tmpcat);
 			}
-			show_listing(main_view + right_win, 0);
+			refresh_listing(main_view + right_win, 0);
 			print_status_bottom(main_view + bot_win);
 			print_status_top(main_view + top_win);
 			tree_needs_update = 0;

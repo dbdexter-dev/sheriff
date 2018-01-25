@@ -1,0 +1,17 @@
+#ifndef __BACKEND_H
+#define __BACKEND_H
+
+#include <ncurses.h>
+#include "dir.h"
+
+typedef struct
+{
+	WINDOW* win;            /* Ncurses window being managed */
+	struct direntry* dir;   /* Directory associated with the view */
+} Dirview;
+
+int navigate_fwd(Dirview* left, Dirview* center, Dirview* right);
+int navigate_back(Dirview* left, Dirview* center, Dirview* right);
+int associate_dir(Dirview* view, struct direntry* direntry);
+
+#endif

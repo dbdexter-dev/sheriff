@@ -5,13 +5,6 @@
 #include "utils.h"
 
 void
-die(char* msg)
-{
-	fprintf(stderr, "[FATAL]: %s\n", msg);
-	exit(1);
-}
-
-void
 octal_to_str(int oct, char str[])
 {
 	int i;
@@ -48,12 +41,8 @@ void*
 safealloc(size_t s)
 {
 	void* ret;
-
 	ret = malloc(s);
-
-	if(!ret)
-		die("Malloc failed");
-
+	assert(ret);
 	return ret;
 }
 
@@ -86,9 +75,9 @@ tohuman(unsigned long bytes, char* human)
 
 	/* Integer divide until the last moment */
 	for(exp_3 = 0, fbytes = bytes; fbytes > 1000; fbytes /= 1000, exp_3++);
-	if(fbytes > 100)
+	if(fbytes >= 100)
 		sprintf(human, "%3.f %c", fbytes, suffix[exp_3]);
-	else if(fbytes > 10)
+	else if(fbytes >= 10)
 		sprintf(human, "%3.1f %c", fbytes, suffix[exp_3]);
 	else
 		sprintf(human, "%3.2f %c", fbytes, suffix[exp_3]);

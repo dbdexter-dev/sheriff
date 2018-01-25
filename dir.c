@@ -11,7 +11,6 @@
 #include "utils.h"
 
 #include <stdio.h>
-#define _GNU_SOURCE
 
 static fileentry_t* dirlist(char* path);
 static void         free_tree(fileentry_t* tree);
@@ -40,24 +39,48 @@ free_listing(struct direntry** direntry)
 int
 init_listing(struct direntry** direntry, char* path)
 {
+	fileentry_t* tmp;
+
 	assert(direntry);
 	assert(path);
 
 	*direntry = safealloc(sizeof(struct direntry));
-	fileentry_t* tmp;
-	/* Save the parent workdir */
+	/* Save the current workdir */
 	(*direntry)->path = realpath(path, NULL);
 
 	/* Populate and sort */
 	(*direntry)->tree = dirlist(path);
 	sort_tree((*direntry)->tree);
-	(*direntry)->sel_idx = 0;
 
 	/* Find the tree size */
+	(*direntry)->tree_size = 0;
 	for(tmp = (*direntry)->tree; tmp != NULL; tmp=tmp->next, (*direntry)->tree_size++);
+	try_select(*direntry, 0);
+
 	return 0;
 }
 
+/* Try to select the idxth element in the list */
+int
+try_select(struct direntry* direntry, int idx)
+{
+	int i;
+
+	if(idx > direntry->tree_size)
+		direntry->sel_idx = direntry->tree_size - 1;
+	else if (idx < 0)
+		direntry->sel_idx = 0;
+	else
+		direntry->sel_idx = idx;
+
+	/* Update the sel pointer to the currently selected entry */
+	direntry->sel = direntry->tree;
+	for(i=0; i<direntry->sel_idx; i++, direntry->sel = direntry->sel->next);
+
+	return direntry->sel_idx;
+}
+
+/* Static functions *//*{{{*/
 /* Populate a fileentry_t list with a directory listing */
 fileentry_t*
 dirlist(char* path)
@@ -90,8 +113,8 @@ dirlist(char* path)
 			strncpy(tree->name, ep->d_name, MAXLEN);
 
 			/* Allocate space for the concatenation <path>.<filename> */
-			tmp = safealloc(sizeof(char) * (strlen(path) + strlen(tree->name) + 1));
-			sprintf(tmp, "%s%s", path, tree->name);
+			tmp = safealloc(sizeof(char) * (strlen(path) + strlen(tree->name) + 1 + 1));
+			sprintf(tmp, "%s/%s", path, tree->name);
 
 			/* Get file stats */
 			stat(tmp, &st);
@@ -108,6 +131,8 @@ dirlist(char* path)
 		tree->next = NULL;
 		closedir(dp);
 	}
+	else
+		return NULL;
 
 	return head;
 }
@@ -157,7 +182,7 @@ sort_tree(fileentry_t* tree)
 	fileentry_t* prevtmp, *prevdir;
 
 	if(!tree)
-		die("Cannot sort an empty tree!");
+		return -1;
 
 	/* Split directories and files first */
 	done = 0;
@@ -220,4 +245,4 @@ sort_tree(fileentry_t* tree)
 			}
 	}
 	return 0;
-}
+}/*}}}*/

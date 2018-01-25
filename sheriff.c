@@ -13,7 +13,6 @@
 #include "config.h"
 
 #define MAXHOSTNLEN 32
-#define MAXPWDLEN 64
 #define MAIN_PERC 0.6
 #define WIN_NR 5
 

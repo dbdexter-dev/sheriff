@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include "dir.h"
@@ -88,8 +89,9 @@ int
 sort_tree(fileentry_t* tree)
 {
 	int done;
-	fileentry_t* tmpptr, *dirptr;
+	fileentry_t* tmpptr, *dirptr, *orderedptr, *list_begin;
 	fileentry_t* prevtmp, *prevdir;
+	char* fname;
 
 	if(!tree)
 		die("Cannot sort an empty tree!");
@@ -103,7 +105,6 @@ sort_tree(fileentry_t* tree)
 			/* Find the next available directory */
 			prevtmp = dirptr;
 			for(tmpptr = dirptr->next; tmpptr != NULL && tmpptr->type != DT_DIR; prevtmp = tmpptr, tmpptr = tmpptr->next);
-
 			if(tmpptr == NULL)
 				done = 1;
 			else
@@ -115,8 +116,46 @@ sort_tree(fileentry_t* tree)
 		}
 	}
 
-	/* TODO Sort directotries */
-	/* TODO Sort files */
+	list_begin = tree;
+	prevdir = list_begin;
+	for(dirptr = list_begin->next; dirptr->next != NULL && dirptr->type == DT_DIR; prevdir = dirptr, dirptr = dirptr->next)
+	{
+		done = 0;
+		for(prevtmp = NULL, orderedptr = list_begin; orderedptr != dirptr && !done; prevtmp = orderedptr, orderedptr = orderedptr->next)
+			if(strcasecmp(dirptr->name, orderedptr->name) < 0)
+			{
+				assert(prevdir);
+				assert(dirptr);
+				assert(prevtmp);
+				/* Link the list removing dirptr, which is to be inserted */
+				prevdir->next = dirptr->next;
+
+				/* Insert dirptr in its correct place */
+				tmpptr = prevtmp->next;
+				prevtmp->next = dirptr;
+				dirptr->next = tmpptr;
+				done = 1;
+			}
+	}
+
+	list_begin = prevdir;
+	for(dirptr = list_begin->next; dirptr != NULL; prevdir = dirptr, dirptr = dirptr->next)
+	{
+		done = 0;
+		for(prevtmp = list_begin, orderedptr = list_begin->next; orderedptr != dirptr && !done; prevtmp = orderedptr, orderedptr = orderedptr->next)
+			if(strcasecmp(dirptr->name, orderedptr->name) < 0)
+			{
+				assert(prevdir);
+				assert(dirptr);
+				assert(prevtmp);
+				prevdir->next = dirptr->next;
+
+				tmpptr = prevtmp->next;
+				prevtmp->next = dirptr;
+				dirptr->next = tmpptr;
+				done = 1;
+			}
+	}
 	return 0;
 }
 

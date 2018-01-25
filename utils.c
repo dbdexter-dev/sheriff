@@ -11,6 +11,39 @@ die(char* msg)
 	exit(1);
 }
 
+void
+octal_to_str(int oct, char str[])
+{
+	int i;
+	/* Cycle through the three rwx fields */
+	for(i=0; i < 9; i++)
+	{
+		if(oct & (1 << i))
+			switch(i % 3)
+			{
+				case 0:
+					str[9-i] = 'x';
+					break;
+				case 1:
+					str[9-i] = 'w';
+					break;
+				case 2:
+					str[9-i] = 'r';
+					break;
+			}
+		else
+			str[9-i] = '-';
+	}
+	/* Last extended bits */
+	/* TODO: this is not complete by any means */
+	if (oct & 01000)
+		str[0] = '+';
+	else
+		str[0] = '-';
+
+	return;
+}
+
 void*
 safealloc(size_t s)
 {
@@ -42,7 +75,7 @@ strchomp(const char* src, char* dst, const int maxlen)
 }
 
 /* Human formatting of file sizes */
-void 
+void
 tohuman(unsigned long bytes, char* human)
 {
 	const char suffix[] = "BKMGTPE";

@@ -1,14 +1,15 @@
 #include <assert.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include "dir.h"
 #include "utils.h"
 
 #include <stdio.h>
 
-static unsigned long get_file_size(char* path, char* fname);
 static void list_xchg(fileentry_t* a, fileentry_t* b);
 
 /* Populate a fileentry_t list with a directory listing */
@@ -17,6 +18,8 @@ dirlist(char* path)
 {
 	DIR* dp;
 	struct dirent *ep;
+	struct stat st;
+	char* tmp;
 	fileentry_t* head, *tree = NULL;
 
 	assert(path);
@@ -36,9 +39,25 @@ dirlist(char* path)
 				tree = tree->next;
 			}
 
+			/* Populate the first struct fields */
 			tree->type = ep->d_type;
 			strncpy(tree->name, ep->d_name, MAXLEN);
-			tree->size = get_file_size(path, tree->name);
+
+			/* Allocate space for the concatenation <path>.<filename> */
+			tmp = safealloc(sizeof(char) * (strlen(path) + strlen(tree->name) + 1));
+			sprintf(tmp, "%s%s", path, tree->name);
+
+			/* Get file stats */
+			stat(tmp, &st);
+
+			/* Populate the remaining struct fields */
+			tree->size = st.st_size;
+			tree->uid = st.st_uid;
+			tree->gid = st.st_gid;
+			tree->mode = st.st_mode;
+			tree->lastchange = st.st_mtim.tv_sec;
+
+			free(tmp);
 		}
 		tree->next = NULL;
 		closedir(dp);
@@ -47,7 +66,7 @@ dirlist(char* path)
 	return head;
 }
 /* Free a fileentry_t linked list */
-int 
+int
 free_tree(fileentry_t* list)
 {
 	fileentry_t* next;
@@ -62,7 +81,7 @@ free_tree(fileentry_t* list)
 	return 0;
 }
 
-/* Alphabetically sort a directory listing, directories first 
+/* Alphabetically sort a directory listing, directories first
  * This looks ugly because I need to keep track of the element referencing
  * the one I'm looking at in order to exchange them efficiently */
 int
@@ -90,7 +109,8 @@ sort_tree(fileentry_t* tree)
 			else
 			{
 				list_xchg(prevtmp, prevdir);
-				dirptr = prevdir;
+				/* dirptr has changed, update it with the new value */
+				dirptr = prevdir->next;
 			}
 		}
 	}
@@ -100,22 +120,6 @@ sort_tree(fileentry_t* tree)
 	return 0;
 }
 
-
-/* Given a path and a filename, return its size */
-unsigned long
-get_file_size(char* path, char* fname)
-{
-	struct stat st;
-	char* tmp;
-
-	tmp = safealloc(sizeof(char) * (strlen(path) + strlen(fname) + 1));
-	strcpy(tmp, path);
-	strcat(tmp, fname);
-
-	stat(tmp, &st);
-	free(tmp);
-	return st.st_size;
-}
 
 /* XXX XXX XXX XXX XXX XXX XXX XXX XXX */
 /* Will exchange a->next with b->next */

@@ -1,9 +1,11 @@
 #include <assert.h>
 #include <dirent.h>
+#include <limits.h>
 #include <ncurses.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include "dir.h"
@@ -19,6 +21,7 @@
 #define PAIR_GREEN_DEF 2
 #define PAIR_WHITE_DEF 3
 #define PAIR_CYAN_DEF 4
+#define PAIR_YELLOW_DEF 5
 
 enum windows
 {
@@ -29,24 +32,34 @@ enum windows
 	bot_win = 4
 };
 
-typedef struct
+struct direntry
 {
-	WINDOW* win;
+	char* path;
 	fileentry_t* tree;
 	int tree_size;
 	int sel_idx;
+};
+
+typedef struct
+{
+	WINDOW* win;
+	struct direntry* dir;
 } Dirview;
 
 static int   deinit_windows(Dirview view[WIN_NR]);
 static void  init_colors();
 static int   init_windows(Dirview view[WIN_NR], int w, int h, float main_perc);
 static int   populate_listing(Dirview* win, char* dir);
-static void  print_status(Dirview* win, int y, int x);
+static void  print_status_bottom(Dirview* win, int y, int x);
+static void  print_status_top(Dirview* win, int y, int x);
 static void  resize_handler(int sig);
-static int   reverse_line_fg_bg(WINDOW* win, int y, int x);
+static int   set_direntry(Dirview* win, struct direntry* dir);
 static int   show_listing(Dirview* win, int show_sizes);
 static int   try_highlight(Dirview* win, int idx);
 
+/* This is the only variable I can't make non-global
+ * since it is needed by the SIGWINCH handler
+ */
 Dirview main_view[WIN_NR];
 
 int
@@ -55,9 +68,14 @@ deinit_windows(Dirview view[WIN_NR])
 	int i;
 
 	assert(view);
-	/* Deallocate directory listings */
+	/* Deallocate directory listings. Top and bottom windows
+	 * inherit the center_win path, so there's no need to free those two */
 	for(i=0; i<WIN_NR; i++)
-		free_tree(view[i].tree);
+		if(view[i].dir && i != top_win && i != bot_win)
+		{
+			free_tree(view[i].dir->tree);
+			free(view[i].dir->path);
+		}
 
 	for(i=0; i<WIN_NR; i++)
 		delwin(view[i].win);
@@ -79,9 +97,13 @@ init_windows(Dirview view[WIN_NR], int row, int col, float main_perc)
 
 	view[top_win].win = newwin(1, col, 0, 0);
 	view[bot_win].win = newwin(1, col, row - 1, 0);
-	view[left_win].win = newwin(row - 2, side_cols, 1, 1);
-	view[center_win].win = newwin(row - 2, main_cols, 1, 1 + side_cols);
-	view[right_win].win = newwin(row - 2, side_cols, 1, 1 + side_cols + main_cols);
+	view[left_win].win = newwin(row - 2, side_cols, 1, 0);
+	view[center_win].win = newwin(row - 2, main_cols, 1, side_cols);
+	view[right_win].win = newwin(row - 2, side_cols, 1, side_cols + main_cols);
+
+	view[left_win].dir->sel_idx=0;
+	view[center_win].dir->sel_idx=0;
+	view[right_win].dir->sel_idx=0;
 
 	return 0;
 }
@@ -94,20 +116,42 @@ init_colors(void)
 	init_pair(PAIR_GREEN_DEF, COLOR_GREEN, -1);
 	init_pair(PAIR_WHITE_DEF, COLOR_WHITE, -1);
 	init_pair(PAIR_CYAN_DEF, COLOR_CYAN, -1);
+	init_pair(PAIR_YELLOW_DEF, COLOR_YELLOW, -1);
 }
 
-/* Updates the top status line
+/* Update the bottom status bar
+ * Format: <mode> <uid> <gid> <last_modified> --- <size>
+ */
+void
+print_status_bottom(Dirview* win, int y, int x)
+{
+	int i;
+	char mode[] = "----------";
+	fileentry_t* cur_file;
+
+	for(cur_file = win->dir->tree, i=0; i<win->dir->sel_idx; i++, cur_file = cur_file->next);
+
+	octal_to_str(cur_file->mode, mode);
+
+	assert(win->win);
+	wattrset(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
+	// TODO: mode to string
+	mvwprintw(win->win, y, x, "%s %d %d", mode, cur_file->uid, cur_file->gid);
+	wrefresh(win->win);
+}
+
+/* Updates the top status bar
  * Format: <user>@<host> $PWD/<selected entry>
  */
-void 
-print_status(Dirview* win, int y, int x)
+void
+print_status_top(Dirview* win, int y, int x)
 {
 	char* username;
 	char* workdir;
 	char hostname[MAXHOSTNLEN+1];
 
 	username = getenv("USER");
-	workdir = getenv("PWD");
+	workdir = win->dir->path;
 	gethostname(hostname, MAXHOSTNLEN);
 
 	assert(username);
@@ -129,43 +173,69 @@ int
 populate_listing(Dirview* win, char* dir)
 {
 	fileentry_t* tmp;
+	struct direntry *direntry;
+
+	/* Convenience variable to do fewer memory accesses */
+	direntry = win->dir;
+
+	/* Save the parent workdir */
+	direntry->path = realpath(dir, NULL);
 
 	/* Populate and sort */
-	win->tree = dirlist(dir);
-	sort_tree(win->tree); 
+	direntry->tree = dirlist(dir);
+	sort_tree(direntry->tree);
 
 	/* Find the tree size */
-	for(tmp = win->tree; tmp != NULL; tmp=tmp->next, win->tree_size++);
+	for(tmp = direntry->tree; tmp != NULL; tmp=tmp->next, direntry->tree_size++);
 	return 0;
 }
 
-void  
+void
 resize_handler(int sig)
 {
-	int i, nr, nc;
+	int i, nr, nc, main_cols, side_cols;
+	int status;
+
+	/* Re-initialize ncurses with the correct dimensions */
+	endwin();
+	refresh();
+	getmaxyx(stdscr, nr, nc);
+
+	main_cols = nc * MAIN_PERC;
+	side_cols = (nc - main_cols) / 2;
+
+	fprintf(stderr, "Resizing to %dx%d, main %d, side %d\n", nc, nr, main_cols, side_cols);
 
 	for(i=0; i<WIN_NR; i++)
-		delwin(main_view[i].win);
+		mvwin(main_view[i].win, 0, 0);
 
-	endwin();
+	status |= wresize(main_view[top_win].win, 1, nc);
+	status = mvwin(main_view[top_win].win, 0, 0);
+	assert(!status);
+	status |= wresize(main_view[bot_win].win, 1, nc);
+	status |= mvwin(main_view[bot_win].win, nr - 1, 0);
+	assert(!status);
+	status |= wresize(main_view[left_win].win, nr - 2, side_cols);
+	status |= mvwin(main_view[left_win].win, 1, 0);
+	assert(!status);
+	status |= wresize(main_view[center_win].win, nr - 2, main_cols);
+	status |= mvwin(main_view[center_win].win, 1, side_cols);
+	assert(!status);
+	status |= wresize(main_view[right_win].win, nr - 2, side_cols);
+	status |= mvwin(main_view[right_win].win, 1, side_cols + main_cols);
+	assert(!status);
 
-	initscr();
-	getmaxyx(stdscr, nr, nc);
-	init_windows(main_view, nr, nc, MAIN_PERC);
-
-	print_status(main_view + top_win, 0, 0);
+	print_status_top(main_view + top_win, 0, 0);
 	show_listing(main_view + left_win, 0);
 	show_listing(main_view + center_win, 1);
 }
 
+/* Set the direntry associated with a window to the specified pointer */
 int
-reverse_line_fg_bg(WINDOW* win, int y, int x)
+set_direntry(Dirview* win, struct direntry* dir)
 {
-	attr_t attr;
-
-	attr = (mvwinch(win, y, x) & A_ATTRIBUTES) ^ A_REVERSE;
-	wchgat(win, -1, attr, 0, NULL);
-
+	assert(win);
+	win->dir = dir;
 	return 0;
 }
 
@@ -178,7 +248,8 @@ show_listing(Dirview* win, int show_sizes)
 	const fileentry_t* tmptree;
 
 	assert(win->win);
-	assert(win->tree);
+	assert(win->dir);
+	assert(win->dir->tree);
 
 	/* Allocate enough space to fit the shortened listing names */
 	getmaxyx(win->win, maxrows, maxcols);
@@ -187,10 +258,10 @@ show_listing(Dirview* win, int show_sizes)
 	/* Go to the top corner */
 	wmove(win->win, 0, 0);
 	wclear(win->win);
-	
+
 	rowcount = 0;
 	/* Read up to $maxrows entries */
-	for(tmptree = win->tree; (tmptree != NULL) && rowcount < maxrows; tmptree = tmptree->next)
+	for(tmptree = win->dir->tree; (tmptree != NULL) && rowcount < maxrows; tmptree = tmptree->next)
 	{
 		assert(tmptree);
 		/* Change color based on the entry type */
@@ -201,6 +272,12 @@ show_listing(Dirview* win, int show_sizes)
 				break;
 			case DT_DIR:
 				wattrset(win->win, A_BOLD | COLOR_PAIR(PAIR_GREEN_DEF));
+				break;
+			case DT_BLK:
+			case DT_FIFO:
+			case DT_SOCK:
+			case DT_CHR:
+				wattrset(win->win, COLOR_PAIR(PAIR_YELLOW_DEF));
 				break;
 			case DT_REG:
 			default:
@@ -215,15 +292,15 @@ show_listing(Dirview* win, int show_sizes)
 		}
 		else
 		{
-			/* TODO: print file size if we're asked to 
+			/* TODO: print file size if we're asked to
 			 * So, chomp string to maxcols - 1 - (space reserved to size) */
 			wprintw(win->win, "%s", tmptree->name);
 			wprintw(win->win, "\n");
 		}
-		/* if(rowcount == win->sel_idx)
+		/* TODO: makes the first row disappear */
+/*		if(rowcount == win->dir->sel_idx)
 			try_highlight(win, rowcount);
-
-		*/
+*/
 		rowcount++;
 	}
 
@@ -236,22 +313,26 @@ show_listing(Dirview* win, int show_sizes)
 int
 try_highlight(Dirview* win, int idx)
 {
-	return 0;
-	if(idx == win->sel_idx)
-		return idx;
+	attr_t attr;
 
-	reverse_line_fg_bg(win->win, win->sel_idx, 0);
+	/* Turn off highlighting for the previous line */
+	attr = (mvwinch(win->win, win->dir->sel_idx, 0) & (A_COLOR | A_ATTRIBUTES)) & ~A_REVERSE;
+	wchgat(win->win, -1, attr, PAIR_NUMBER(attr), NULL);
 
-	if(idx > win->tree_size - 1)
-		win->sel_idx = win->tree_size - 1;
+	/* Move to the specified line */
+	if(idx > win->dir->tree_size - 1)
+		win->dir->sel_idx = win->dir->tree_size - 1;
 	else if (idx < 0)
-		win->sel_idx = 0;
+		win->dir->sel_idx = 0;
 	else
-		win->sel_idx = idx;
+		win->dir->sel_idx = idx;
 
-	reverse_line_fg_bg(win->win, win->sel_idx, 0);
+	/* Turn on highlighting for this line */
+	attr = (mvwinch(win->win, win->dir->sel_idx, 0) & (A_COLOR | A_ATTRIBUTES)) | A_REVERSE;
+	wchgat(win->win, -1, attr, PAIR_NUMBER(attr), NULL);
 
-	return win->sel_idx;
+	/* Return the highlighted line number */
+	return win->dir->sel_idx;
 }
 
 int
@@ -261,6 +342,12 @@ main(int argc, char* argv[])
 	int i;
 	char ch;
 	int cur_highlight = 0;
+	struct direntry *left_direntry, *center_direntry, *right_direntry;
+
+	/* Initialize the direntry struct ptrs */
+	left_direntry = safealloc(sizeof(struct direntry));
+	center_direntry = safealloc(sizeof(struct direntry));
+	right_direntry = safealloc(sizeof(struct direntry));
 
 	/* Initialize ncurses */
 	signal(SIGWINCH, resize_handler);     /* Register the resize handler */
@@ -274,20 +361,29 @@ main(int argc, char* argv[])
 
 	getmaxyx(stdscr, max_row, max_col);
 
+	/* Associate windows to their direntries */
+	set_direntry(main_view + left_win, left_direntry);
+	set_direntry(main_view + center_win, center_direntry);
+	set_direntry(main_view + right_win, right_direntry);
+	set_direntry(main_view + top_win, center_direntry);
+	set_direntry(main_view + bot_win, center_direntry);
+
 	/* Initialize colorschemes */
 	init_colors();
 	/* Initialize windows */
 	init_windows(main_view, max_row, max_col, MAIN_PERC);
 
 	for(i=0; i<WIN_NR; i++)
-		main_view[i].sel_idx = 0;
+		main_view[i].dir->sel_idx = 0;
 
 	refresh();
 
-	print_status(main_view + top_win, 0, 0);
 	populate_listing(main_view + left_win, "../");
 	populate_listing(main_view + center_win, "./");
 
+
+	print_status_top(main_view + top_win, 0, 0);
+	print_status_bottom(main_view + bot_win, 0, 0);
 	show_listing(main_view + left_win, false);
 	show_listing(main_view + center_win, false);
 
@@ -308,10 +404,15 @@ main(int argc, char* argv[])
 			default:
 				break;
 		}
+		print_status_bottom(main_view + bot_win, 0, 0);
 	}
 	/* Terminate ncurses session */
 	deinit_windows(main_view);
 	endwin();
+
+	free(left_direntry);
+	free(center_direntry);
+	free(right_direntry);
 	return 0;
 }
 

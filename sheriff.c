@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <assert.h>
 #include <dirent.h>
 #include <limits.h>
@@ -20,6 +22,7 @@
 #define MAXHOSTNLEN 32
 #define MAXDATELEN 18
 #define MAXCMDLEN 128
+#define MAXSEARCHLEN MAXCMDLEN
 #define WIN_NR 5
 
 #define PAIR_BLUE_DEF 1
@@ -43,12 +46,12 @@ enum windows
 
 typedef union
 {
-	unsigned int i;
+	int i;
 	void* v;
 } Arg;
 
 static int   deinit_windows(Dirview view[WIN_NR]);
-static void  dialog_open_with(Dirview* view, char* fname);
+static void  dialog(Dirview* view, char* msg, char* buf);
 static void  init_colors();
 static int   init_windows(Dirview view[WIN_NR], int w, int h, float main_perc);
 static void  print_status_bottom(Dirview* win);
@@ -59,6 +62,7 @@ static int   try_highlight(Dirview* win, int idx);
 
 static void  enter_directory(const Arg* arg);
 static void  exit_directory(const Arg* arg);
+static void  filesearch(const Arg* arg);
 static void  open_with(const Arg* arg);
 static void  rel_highlight(const Arg* arg);
 
@@ -110,16 +114,69 @@ exit_directory(const Arg* arg)
 	refresh_listing(main_view + RIGHT_WIN, 0);
 }
 
+/* File search */
+void
+filesearch(const Arg* arg)
+{
+	int i, found;
+	char fname[MAXSEARCHLEN+1];
+	const struct direntry* dir = main_view[CENTER_WIN].dir;
+	echo();
+
+	dialog(main_view + BOT_WIN, arg->i > 0 ? "/" : "?", fname);
+	found = 0;
+
+	if(arg->i > 0)
+	{
+		for(i=main_view[CENTER_WIN].dir->sel_idx; i<dir->tree_size && !found; i++)
+			if(strcasestr(dir->tree[i]->name, fname))
+			{
+				main_view[CENTER_WIN].dir->sel_idx = i;
+				found = 1;
+			}
+	}
+	else
+	{
+		for(i=main_view[CENTER_WIN].dir->sel_idx; i>=0 && !found; i--)
+			if(strcasestr(dir->tree[i]->name, fname))
+			{
+				main_view[CENTER_WIN].dir->sel_idx = i;
+				found = 1;
+			}
+	}
+	refresh_listing(main_view + CENTER_WIN, 1);
+	noecho();
+}
+
 void
 open_with(const Arg* arg)
 {
 	struct direntry* dir = arg->v;
 	char* fname;
+	char cmd[MAXCMDLEN+1];
+	pid_t pid;
 
 	fname = safealloc(sizeof(char) * (strlen(dir->path) + strlen(dir->tree[dir->sel_idx]->name) + 1 + 1));
 	sprintf(fname, "%s/%s", dir->path, dir->tree[dir->sel_idx]->name);
 
-	dialog_open_with(main_view + BOT_WIN, fname);
+	/* Ask the user for a command to open the file with */
+	dialog(main_view + BOT_WIN,  "open_with: ", cmd);
+
+	/* Leave curses mode */
+	def_prog_mode();
+	endwin();
+
+	/* Spawn the requested command */
+	if(!(pid = fork()))
+	{
+		execlp(cmd, cmd, fname, NULL);
+		exit(0);
+	}
+	else
+		waitpid(pid, NULL, 0);
+
+	/* Restore curses mode */
+	reset_prog_mode();
 	free(fname);
 }
 
@@ -183,39 +240,22 @@ deinit_windows(Dirview view[WIN_NR])
 	return 0;
 }
 
-/* Show a dialog asking for a command to open a file with */
+/* Show a dialog prompt in a specified window */
 void
-dialog_open_with(Dirview* win, char* fname)
+dialog(Dirview* win, char* msg, char* input)
 {
-	pid_t pid;
-	char command[MAXCMDLEN+1];
-
-	/* Ask for the command to open the file with */
 	werase(win->win);
 	wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
-	mvwprintw(win->win, 0, 0, "open_with: ");
+	mvwprintw(win->win, 0, 0, msg);
+
 	echo();
 	curs_set(1);
-	wgetnstr(win->win, command, MAXCMDLEN);
 
-	/* Leave curses mode */
-	def_prog_mode();
-	endwin();
-
-	/* Spawn the requested command */
-	if(!(pid = fork()))
-	{
-		execlp(command, command, fname, NULL);
-		exit(0);
-	}
-	else
-		waitpid(pid, NULL, 0);
-
-	/* Restore curses mode */
-	reset_prog_mode();
-	noecho();
-	curs_set(0);
+	wgetnstr(win->win, input, MAXCMDLEN);
 	werase(win->win);
+
+	curs_set(0);
+	noecho();
 }
 
 /* Initialize the windows that make up the main view */
@@ -471,16 +511,14 @@ int
 main(int argc, char* argv[])
 {
 	int i, max_row, max_col;
-	char ch;
-	char *tmpcat, *center_wd, *center_selected;
+	wchar_t ch;
 
 	/* Initialize ncurses */
 	signal(SIGWINCH, resize_handler);     /* Register the resize handler */
-	initscr();
-	cbreak();                             /* Quasi-raw input */
-	keypad(stdscr, TRUE);
-	curs_set(0);                          /* Hide cursor */
+	initscr();                            /* Initialize ncurses sesion */
 	noecho();                             /* Don't echo keys pressed */
+	cbreak();                             /* Quasi-raw input */
+	curs_set(0);                          /* Hide cursor */
 	use_default_colors();                 /* Enable default 16 colors */
 	start_color();
 
@@ -496,10 +534,9 @@ main(int argc, char* argv[])
 	main_view[TOP_WIN].dir = main_view[CENTER_WIN].dir;
 	main_view[BOT_WIN].dir = main_view[CENTER_WIN].dir;
 
-	/* Initialize colorschemes */
-	init_colors();
-	/* Initialize windows */
-	init_windows(main_view, max_row, max_col, MAIN_PERC);
+	init_colors();                                          /* Initialize colorschemes */
+	init_windows(main_view, max_row, max_col, MAIN_PERC);   /* Initialize windows */
+	keypad(main_view[BOT_WIN].win, TRUE);                   /* Enable keypad input from where we'll get it */
 
 	refresh_listing(main_view + LEFT_WIN, 0);
 	refresh_listing(main_view + CENTER_WIN, 1);
@@ -515,8 +552,8 @@ main(int argc, char* argv[])
 			if(ch == keys[i].key)
 				keys[i].funct(&keys[i].arg);
 
-		print_status_bottom(main_view + BOT_WIN);
 		print_status_top(main_view + TOP_WIN);
+		print_status_bottom(main_view + BOT_WIN);
 	}
 	/* Terminate ncurses session */
 	deinit_windows(main_view);

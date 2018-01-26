@@ -436,7 +436,7 @@ refresh_listing(Dirview* win, int show_sizes)
 	wmove(win->win, 0, 0);
 
 	/* Allocate enough space to fit the shortened listing names */
-	tmpstring = safealloc(sizeof(*tmpstring) * mc);
+	tmpstring = safealloc(sizeof(*tmpstring) * (mc + 1));
 
 	if(win->dir->sel_idx - win->offset >= mr)
 		win->offset = (win->dir->sel_idx - mr + 1);
@@ -473,7 +473,7 @@ refresh_listing(Dirview* win, int show_sizes)
 		/* Chomp string so that it fits in the window */
 		if(!show_sizes || tmpfile->size < 0)
 		{
-			if(strchomp(tmpfile->name, tmpstring, mc - 1))
+			if(strchomp(tmpfile->name, tmpstring, mc))
 				die("We do not kno de wey (read: strchomp failed)");
 			wprintw(win->win, "%s\n", tmpstring);
 		}
@@ -481,7 +481,7 @@ refresh_listing(Dirview* win, int show_sizes)
 		{
 			/* Convert byte count to human-readable size */
 			tohuman(tmpfile->size, humansize);
-			strchomp(tmpfile->name, tmpstring, mc - 1 - HUMANSIZE_LEN - 1);
+			strchomp(tmpfile->name, tmpstring, mc - HUMANSIZE_LEN - 1);
 
 			wprintw(win->win, "%s", tmpstring);
 			mvwprintw(win->win, i - win->offset, mc - HUMANSIZE_LEN - 1,

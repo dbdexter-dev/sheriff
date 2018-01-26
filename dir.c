@@ -32,7 +32,7 @@ free_listing(struct direntry** direntry)
 
 	if((*direntry)->tree)
 	{
-		for(i=0; i<(*direntry)->tree_size; i++)
+		for(i=0; i<(*direntry)->count; i++)
 			free((*direntry)->tree[i]);
 		free((*direntry)->tree);
 		(*direntry)->tree = NULL;
@@ -58,12 +58,12 @@ init_listing(struct direntry** direntry, char* path)
 	assert(direntry);
 	assert(path);
 
-	*direntry = safealloc(sizeof(struct direntry));
+	*direntry = safealloc(sizeof(**direntry));
 	/* Save the current workdir */
 	(*direntry)->path = realpath(path, NULL);
 
 	/* Populate and sort */
-	(*direntry)->tree = dirlist(path, &(*direntry)->tree_size);
+	(*direntry)->tree = dirlist(path, &(*direntry)->count);
 	sort_tree(*direntry);
 
 	/* Find the tree size */
@@ -76,8 +76,8 @@ init_listing(struct direntry** direntry, char* path)
 int
 try_select(struct direntry* direntry, int idx)
 {
-	if(idx >= direntry->tree_size)
-		idx = direntry->tree_size - 1;
+	if(idx >= direntry->count)
+		idx = direntry->count - 1;
 	else if (idx < 0)
 		idx = 0;
 
@@ -112,9 +112,9 @@ dirlist(char* path, int* entry_nr)
 	/* Opendir failed, create a single element */
 	else
 	{
-		tree = safealloc(sizeof(fileentry_t*));
-		*tree = safealloc(sizeof(fileentry_t));
-		memset(*tree, '\0', sizeof(fileentry_t));
+		tree = safealloc(sizeof(*tree));
+		*tree = safealloc(sizeof(**tree));
+		memset(*tree, '\0', sizeof(**tree));
 
 		(*tree)->size = -1;
 		switch(errno)
@@ -134,9 +134,9 @@ dirlist(char* path, int* entry_nr)
 	}
 
 	/* Allocate a chunk of memory to contain all the elements */
-	tree = safealloc(sizeof(fileentry_t*) * *entry_nr);
+	tree = safealloc(sizeof(*tree) * *entry_nr);
 	for(i=0; i<*entry_nr; i++)
-		tree[i] = safealloc(sizeof(fileentry_t));
+		tree[i] = safealloc(sizeof(*tree[i]));
 
 	/* Populate the directory listing */
 	if((dp = opendir(path)))
@@ -145,10 +145,10 @@ dirlist(char* path, int* entry_nr)
 		{
 			ep = readdir(dp);
 			/* Populate the first struct fields */
-			strncpy(tree[i]->name, ep->d_name, MAXLEN);
+			strcpy(tree[i]->name, ep->d_name);
 
 			/* Allocate space for the concatenation <path>/<filename> */
-			tmp = safealloc(sizeof(char) * (strlen(path) + strlen(tree[i]->name) + 1 + 1));
+			tmp = safealloc(sizeof(*tmp) * (strlen(path) + strlen(tree[i]->name) + 1 + 1));
 			sprintf(tmp, "%s/%s", path, tree[i]->name);
 
 			/* Get file stats */
@@ -167,7 +167,7 @@ dirlist(char* path, int* entry_nr)
 	}
 	else
 	{
-		memset(*tree, '\0', sizeof(fileentry_t));
+		memset(*tree, '\0', sizeof(**tree));
 
 		(*tree)->size = -1;
 		switch(errno)
@@ -221,12 +221,12 @@ sort_tree(struct direntry* dir)
 
 	/* Split directories and files first */
 	done = 0;
-	for(i=0; i<dir->tree_size && !done; i++)
+	for(i=0; i<dir->count && !done; i++)
 	{
 		if(!S_ISDIR(tree[i]->mode))
 		{
-			for(j=i; j<dir->tree_size && !S_ISDIR(tree[j]->mode); j++);
-			if(j == dir->tree_size)
+			for(j=i; j<dir->count && !S_ISDIR(tree[j]->mode); j++);
+			if(j == dir->count)
 				done = 1;
 			else
 			{
@@ -237,11 +237,11 @@ sort_tree(struct direntry* dir)
 	}
 
 	/* Sort directories */
-	for(i=0; i<dir->tree_size && S_ISDIR(tree[i]->mode); i++)
+	for(i=0; i<dir->count && S_ISDIR(tree[i]->mode); i++)
 	{
 		tmp = tree[i]->name;
 		tmp_i = i;
-		for(j=i+1; j<dir->tree_size && S_ISDIR(tree[j]->mode); j++)
+		for(j=i+1; j<dir->count && S_ISDIR(tree[j]->mode); j++)
 		{
 			if(strcasecmp(tmp, tree[j]->name) > 0)
 			{
@@ -254,11 +254,11 @@ sort_tree(struct direntry* dir)
 	}
 
 	/* Sort files */
-	for(; i<dir->tree_size; i++)
+	for(; i<dir->count; i++)
 	{
 		tmp = tree[i]->name;
 		tmp_i = i;
-		for(j=i+1; j<dir->tree_size; j++)
+		for(j=i+1; j<dir->count; j++)
 		{
 			if(strcasecmp(tmp, tree[j]->name) > 0)
 			{

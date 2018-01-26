@@ -1,3 +1,7 @@
+/**
+ * User configuration file. Contains the various keybindings (and possibily
+ * other options in the future)
+ */
 #ifndef CONFIG_H
 #define CONFIG_H
 

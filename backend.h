@@ -1,3 +1,9 @@
+/**
+ * The backend used by sheriff.c, it's the link between the ncurses UI
+ * and the direntry structs that represent the directory structure. It
+ * contains all the functions that operate on the struct dirview* dir
+ * inside a Dirview struct
+ */
 #ifndef BACKEND_H
 #define BACKEND_H
 
@@ -11,9 +17,9 @@ typedef struct
 	int offset;	            /* Offset from the beginning of the screen */
 } Dirview;
 
-int  navigate_fwd(Dirview* left, Dirview* center, Dirview* right);
-int  navigate_back(Dirview* left, Dirview* center, Dirview* right);
-int  associate_dir(Dirview* view, struct direntry* direntry);
-void update_win_with_path(Dirview* win, char* parent, fileentry_t* leaf);
+int navigate_fwd(Dirview* left, Dirview* center, Dirview* right);
+int navigate_back(Dirview* left, Dirview* center, Dirview* right);
+int associate_dir(Dirview* view, struct direntry* direntry);
+int update_win_with_path(Dirview* win, char* parent, fileentry_t* leaf);
 
 #endif

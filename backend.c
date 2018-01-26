@@ -24,7 +24,9 @@ navigate_back(Dirview* left, Dirview* center, Dirview* right)
 {
 	fileentry_t tmp = {.name = "../", .mode = S_IFDIR};
 
-	assert(!free_listing(&(right->dir)));
+	if(free_listing(&(right->dir)))
+		return 1;
+
 	right->dir = center->dir;
 	right->offset = center->offset;
 	center->dir = left->dir;
@@ -65,16 +67,17 @@ navigate_fwd(Dirview* left, Dirview* center, Dirview* right)
 	return 0;
 }
 
-void
+int
 update_win_with_path(Dirview* win, char* parent, fileentry_t* leaf)
 {
 	char* tmp;
 
-	assert(!free_listing(&win->dir));
+	if(free_listing(&win->dir))
+		return 1;
 
 	if(S_ISDIR(leaf->mode))
 	{
-		tmp = safealloc(sizeof(char) * (strlen(parent) + strlen(leaf->name) + 1 + 1));
+		tmp = safealloc(sizeof(*tmp) * (strlen(parent) + strlen(leaf->name) + 1 + 1));
 		sprintf(tmp, "%s/%s", parent, leaf->name);
 		init_listing(&(win->dir), tmp);
 		win->offset = 0;

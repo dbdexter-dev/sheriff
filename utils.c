@@ -5,6 +5,13 @@
 #include "utils.h"
 
 void
+die(char* msg)
+{
+	fprintf(stderr, "[FATAL]: %s >.<\n", msg);
+	exit(1);
+}
+
+void
 octal_to_str(int oct, char str[])
 {
 	int i;

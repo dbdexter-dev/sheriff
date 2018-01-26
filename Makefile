@@ -16,4 +16,4 @@ sheriff.o: sheriff.c config.h
 	gcc ${CFLAGS} -c -o $@ $<
 
 clean:
-	rm -v ${OBJ} sheriff
+	rm -fv ${OBJ} sheriff

@@ -7,6 +7,7 @@
 * Rewrite resize\_handler to resize as init\_windows does
 * Switch from insertion sort to something more efficient
 * Implement quick search
+* Allow traversing links if they link to directories
 
 # Makefile
 * Add release target (-O2 and strip and stuff)

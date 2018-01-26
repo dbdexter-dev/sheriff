@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -74,10 +75,15 @@ enter_directory(const Arg* arg)
 	int is_file;
 	Arg open_arg;
 
+	/* If type < 0, it's not a file, but a message (e.g. "inaccessible"): bail out*/
+	if(main_view[CENTER_WIN].dir->tree[main_view[CENTER_WIN].dir->sel_idx]->mode == 0)
+		return;
+
 	is_file = navigate_fwd(main_view + LEFT_WIN, main_view + CENTER_WIN, main_view + RIGHT_WIN);
 	/* If current element is a file, open a dialog */
 	if(is_file)
 	{
+
 		open_arg.v = (void*) main_view[CENTER_WIN].dir;
 		open_with(&open_arg);
 	}
@@ -86,8 +92,10 @@ enter_directory(const Arg* arg)
 	{
 		associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
 		associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
+		main_view[CENTER_WIN].offset = 0;
 		refresh_listing(main_view + LEFT_WIN, 0);
 		refresh_listing(main_view + CENTER_WIN, 1);
+		refresh_listing(main_view + RIGHT_WIN, 0);
 	}
 }
 
@@ -97,9 +105,9 @@ exit_directory(const Arg* arg)
 	navigate_back(main_view + LEFT_WIN, main_view + CENTER_WIN, main_view + RIGHT_WIN);
 	associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
 	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
-	try_highlight(main_view + CENTER_WIN, main_view[CENTER_WIN].dir->sel_idx);
 	refresh_listing(main_view + LEFT_WIN, 0);
 	refresh_listing(main_view + CENTER_WIN, 1);
+	refresh_listing(main_view + RIGHT_WIN, 0);
 }
 
 void
@@ -108,8 +116,8 @@ open_with(const Arg* arg)
 	struct direntry* dir = arg->v;
 	char* fname;
 
-	fname = safealloc(sizeof(char) * (strlen(dir->path) + strlen(dir->sel->name) + 1 + 1));
-	sprintf(fname, "%s/%s", dir->path, dir->sel->name);
+	fname = safealloc(sizeof(char) * (strlen(dir->path) + strlen(dir->tree[dir->sel_idx]->name) + 1 + 1));
+	sprintf(fname, "%s/%s", dir->path, dir->tree[dir->sel_idx]->name);
 
 	dialog_open_with(main_view + BOT_WIN, fname);
 	free(fname);
@@ -118,12 +126,32 @@ open_with(const Arg* arg)
 void
 rel_highlight(const Arg* arg)
 {
-	int cur_pos, prev_offset;
+	int cur_pos, prev_offset, mr;
 
 	prev_offset = main_view[CENTER_WIN].offset;
+	mr = getmaxy(main_view[CENTER_WIN].win);
 
+	/* Handle possible offsets in the window */
 	cur_pos = main_view[CENTER_WIN].dir->sel_idx - main_view[CENTER_WIN].offset;
 	try_highlight(main_view + CENTER_WIN, cur_pos + arg->i);
+
+	/* If the selected element is a directory, update the right pane
+	 * Otherwise, free it so that refresh_listing will show a blank pane */
+	if(S_ISDIR(main_view[CENTER_WIN].dir->tree[main_view[CENTER_WIN].dir->sel_idx]->mode))
+		update_win_with_path(main_view + RIGHT_WIN,
+		                     main_view[CENTER_WIN].dir->path,
+		                     main_view[CENTER_WIN].dir->tree[main_view[CENTER_WIN].dir->sel_idx]);
+	else
+		assert(!free_listing(&main_view[RIGHT_WIN].dir));
+
+	/* TODO update only if needed */
+	refresh_listing(main_view + RIGHT_WIN, 0);
+
+	/* Calculate the offsets since they might have changed */
+	if(main_view[CENTER_WIN].dir->sel_idx - main_view[CENTER_WIN].offset >= mr)
+		main_view[CENTER_WIN].offset = (main_view[CENTER_WIN].dir->sel_idx - mr + 1);
+	else if (main_view[CENTER_WIN].dir->sel_idx - main_view[CENTER_WIN].offset < 0)
+		main_view[CENTER_WIN].offset = main_view[CENTER_WIN].dir->sel_idx;
 
 	if(main_view[CENTER_WIN].offset != prev_offset)
 		refresh_listing(main_view + CENTER_WIN, 1);
@@ -238,9 +266,11 @@ print_status_bottom(Dirview* win)
 	char mode[] = "----------";
 	char last_modified[MAXDATELEN+1];
 	struct tm* mtime;
+	const struct fileentry* sel;
+	sel = win->dir->tree[win->dir->sel_idx];
 
-	octal_to_str(win->dir->sel->mode, mode);
-	mtime = localtime(&(win->dir->sel->lastchange));
+	octal_to_str(sel->mode, mode);
+	mtime = localtime(&(sel->lastchange));
 	strftime(last_modified, MAXDATELEN, "%F %R", mtime);
 
 	assert(win->win);
@@ -248,7 +278,7 @@ print_status_bottom(Dirview* win)
 	wattrset(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
 	// TODO: mode to string
 	mvwprintw(win->win, 0, 0, "%s  %d  %d  %s",
-	          mode, win->dir->sel->uid, win->dir->sel->gid, last_modified);
+	          mode, sel->uid, sel->gid, last_modified);
 
 	wrefresh(win->win);
 }
@@ -277,7 +307,7 @@ print_status_top(Dirview* win)
 	wattron(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
 	wprintw(win->win, " %s/", workdir);
 	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
-	wprintw(win->win, "%s", win->dir->sel->name);
+	wprintw(win->win, "%s", win->dir->tree[win->dir->sel_idx]->name);
 
 	wrefresh(win->win);
 }
@@ -326,10 +356,10 @@ resize_handler(int sig)
 int
 refresh_listing(Dirview* win, int show_sizes)
 {
-	int mr, mc, rowcount;
+	int mr, mc, i;
 	char* tmpstring;
 	char humansize[HUMANSIZE_LEN+1];
-	fileentry_t* tmptree;
+	fileentry_t* tmpfile;
 
 	assert(win->win);
 
@@ -342,62 +372,64 @@ refresh_listing(Dirview* win, int show_sizes)
 
 	/* Allocate enough space to fit the shortened listing names */
 	getmaxyx(win->win, mr, mc);
-	tmpstring = safealloc(sizeof(char) * mc);
 
 	/* Go to the top corner */
 	werase(win->win);
 	wmove(win->win, 0, 0);
 
-	/* Skip the first $offset entries as they're off screen */
-	tmptree = win->dir->tree;
-	for(rowcount = 0; (tmptree != NULL) && rowcount < win->offset; rowcount++)
-		tmptree = tmptree->next;
+	tmpstring = safealloc(sizeof(char) * mc);
+
 	/* Read up to $mr entries */
-	for(rowcount = 0; tmptree != NULL && rowcount < mr; rowcount++, tmptree = tmptree->next)
+	if(win->dir->sel_idx - win->offset >= mr)
+		win->offset = (win->dir->sel_idx - mr + 1);
+	else if (win->dir->sel_idx - win->offset < 0)
+		win->offset = win->dir->sel_idx;
+
+	for(i = win->offset; i < win->dir->tree_size && (i - win->offset) < mr; i++)
 	{
-		assert(tmptree);
+		tmpfile = win->dir->tree[i];
 		/* Change color based on the entry type */
-		switch(tmptree->type)
+		switch(tmpfile->mode & S_IFMT)
 		{
-			case -1:
+			case 0:
 				wattrset(win->win, COLOR_PAIR(PAIR_RED_DEF));
 				break;
-			case DT_LNK:
+			case S_IFLNK:
 				wattrset(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
 				break;
-			case DT_DIR:
+			case S_IFDIR:
 				wattrset(win->win, A_BOLD | COLOR_PAIR(PAIR_GREEN_DEF));
 				break;
-			case DT_BLK:
-			case DT_FIFO:
-			case DT_SOCK:
-			case DT_CHR:
+			case S_IFBLK:
+			case S_IFIFO:
+			case S_IFSOCK:
+			case S_IFCHR:
 				wattrset(win->win, COLOR_PAIR(PAIR_YELLOW_DEF));
 				break;
-			case DT_REG:
+			case S_IFREG:
 			default:
 				wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
 				break;
 		}
 		/* Chomp string so that it fits in the window */
-		if(!show_sizes || tmptree->size < 0)
+		if(!show_sizes || tmpfile->size < 0)
 		{
-			strchomp(tmptree->name, tmpstring, mc - 1);
+			assert(!strchomp(tmpfile->name, tmpstring, mc - 1));
 			wprintw(win->win, "%s\n", tmpstring);
 		}
 		else
 		{
 			/* Convert byte count to human-readable size */
-			tohuman(tmptree->size, humansize);
-			strchomp(tmptree->name, tmpstring, mc - 1 - HUMANSIZE_LEN - 1);
+			tohuman(tmpfile->size, humansize);
+			strchomp(tmpfile->name, tmpstring, mc - 1 - HUMANSIZE_LEN - 1);
 
 			wprintw(win->win, "%s", tmpstring);
-			mvwprintw(win->win, rowcount, mc - HUMANSIZE_LEN - 1,
+			mvwprintw(win->win, i - win->offset, mc - HUMANSIZE_LEN - 1,
 			          "%6s\n", humansize);
 		}
 		/* Higlight the element marked as selected in the dir tree */
-		if(rowcount == win->dir->sel_idx - win->offset)
-			try_highlight(win, rowcount);
+		if(i == win->dir->sel_idx)
+			try_highlight(win, i - win->offset);
 
 	}
 
@@ -411,24 +443,11 @@ int
 try_highlight(Dirview* win, int idx)
 {
 	int savedrow, savedcol;
-	int mr, cur_row;
+	int cur_row;
 	attr_t attr;
 
 	assert(win);
 	assert(win->win);
-
-	/* If we have reached the top/bottom of the screen, scroll*/
-	mr = getmaxy(win->win);
-	if(idx >= mr - 1)
-	{
-		win->offset += (idx - mr + 1);
-		idx = mr - 1;
-	}
-	else if(idx < 0 && win->offset > 0)
-	{
-		win->offset += idx;
-		idx = 0;
-	}
 
 	getyx(win->win, savedrow, savedcol);
 	cur_row = win->dir->sel_idx - win->offset;
@@ -472,6 +491,7 @@ main(int argc, char* argv[])
 	init_listing(&(main_view[CENTER_WIN].dir), "./");
 	init_listing(&(main_view[RIGHT_WIN].dir), "./");
 
+
 	/* Associate status bars to the main direntry */
 	main_view[TOP_WIN].dir = main_view[CENTER_WIN].dir;
 	main_view[BOT_WIN].dir = main_view[CENTER_WIN].dir;
@@ -495,23 +515,6 @@ main(int argc, char* argv[])
 			if(ch == keys[i].key)
 				keys[i].funct(&keys[i].arg);
 
-		assert(!free_listing(&(main_view[RIGHT_WIN].dir)));
-		if(main_view[CENTER_WIN].dir->sel->type == DT_DIR)
-		{
-			center_wd = main_view[CENTER_WIN].dir->path;
-			center_selected = main_view[CENTER_WIN].dir->sel->name;
-
-			assert(center_wd);
-			assert(center_selected);
-
-			tmpcat = safealloc(sizeof(char) * (strlen(center_wd) + strlen(center_selected) + 1 + 1));
-			sprintf(tmpcat, "%s/%s", center_wd, center_selected);
-
-			init_listing(&(main_view[RIGHT_WIN].dir), tmpcat);
-
-			free(tmpcat);
-		}
-		refresh_listing(main_view + RIGHT_WIN, 0);
 		print_status_bottom(main_view + BOT_WIN);
 		print_status_top(main_view + TOP_WIN);
 	}

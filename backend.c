@@ -42,6 +42,7 @@ navigate_fwd(Dirview* left, Dirview* center, Dirview* right)
 	center->dir = right->dir;
 	center->dir->sel = center->dir->tree;
 	center->dir->sel_idx = 0;
+	center->offset = 0;
 	right->dir = NULL;
 
 	assert(center->dir->path);

@@ -8,6 +8,7 @@ typedef struct
 {
 	WINDOW* win;            /* Ncurses window being managed */
 	struct direntry* dir;   /* Directory associated with the view */
+	int offset;
 } Dirview;
 
 int navigate_fwd(Dirview* left, Dirview* center, Dirview* right);

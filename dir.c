@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
@@ -8,28 +10,39 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include "dir.h"
 #include "utils.h"
 
 #include <stdio.h>
 
-static fileentry_t* dirlist(char* path);
-static void         free_tree(fileentry_t* tree);
-static void         list_xchg(fileentry_t* a, fileentry_t* b);
-static int          sort_tree(fileentry_t* tree);
+static fileentry_t** dirlist(char* path, int* size);
+static void          tree_xchg(fileentry_t** tree, int a, int b);
+static int           sort_tree(struct direntry* dir);
 
 /* Free memory associated with a tree */
 int
 free_listing(struct direntry** direntry)
 {
+	int i;
+
 	if(!(*direntry))
 		return 0;
 
 	if((*direntry)->tree)
-		free_tree((*direntry)->tree);
+	{
+		for(i=0; i<(*direntry)->count; i++)
+			free((*direntry)->tree[i]);
+		free((*direntry)->tree);
+		(*direntry)->tree = NULL;
+	}
 
 	if((*direntry)->path)
+	{
 		free((*direntry)->path);
+		(*direntry)->path = NULL;
+	}
 
 	free((*direntry));
 	*direntry = NULL;
@@ -42,23 +55,18 @@ free_listing(struct direntry** direntry)
 int
 init_listing(struct direntry** direntry, char* path)
 {
-	fileentry_t* tmp;
-
 	assert(direntry);
 	assert(path);
 
-	*direntry = safealloc(sizeof(struct direntry));
+	*direntry = safealloc(sizeof(**direntry));
 	/* Save the current workdir */
 	(*direntry)->path = realpath(path, NULL);
 
 	/* Populate and sort */
-	(*direntry)->tree = dirlist(path);
-	sort_tree((*direntry)->tree);
+	(*direntry)->tree = dirlist(path, &(*direntry)->count);
+	sort_tree(*direntry);
 
 	/* Find the tree size */
-	(*direntry)->tree_size = 0;
-	for(tmp = (*direntry)->tree; tmp != NULL; tmp=tmp->next, (*direntry)->tree_size++);
-	(*direntry)->sel = (*direntry)->tree;
 	(*direntry)->sel_idx = 0;
 
 	return 0;
@@ -68,220 +76,199 @@ init_listing(struct direntry** direntry, char* path)
 int
 try_select(struct direntry* direntry, int idx)
 {
-	int i;
-
-	if(idx >= direntry->tree_size)
-		idx = direntry->tree_size - 1;
+	if(idx >= direntry->count)
+		idx = direntry->count - 1;
 	else if (idx < 0)
 		idx = 0;
 
 	/* Update the sel pointer to the currently selected entry */
-	if(idx == direntry->sel_idx + 1)
-	{
-		direntry->sel_idx = idx;
-		direntry->sel = direntry->sel->next;
-	}
-	else
-	{
-		direntry->sel_idx = idx;
-		for(i=0, direntry->sel = direntry->tree; i<direntry->sel_idx;
-		    i++, direntry->sel = direntry->sel->next);
-	}
+	direntry->sel_idx = idx;
+
 	return direntry->sel_idx;
 }
 
 /* Static functions *//*{{{*/
 /* Populate a fileentry_t list with a directory listing */
-fileentry_t*
-dirlist(char* path)
+fileentry_t**
+dirlist(char* path, int* entry_nr)
 {
 	DIR* dp;
 	struct dirent *ep;
 	struct stat st;
+	int i;
 	char* tmp;
-	fileentry_t* head, *tree = NULL;
+	fileentry_t** tree;
 
 	assert(path);
 
+	/* Calculate how many elements we need to allocate */
+	*entry_nr = 0;
 	if((dp = opendir(path)))
 	{
 		while((ep = readdir(dp)))
-		{
-			if(!tree)
-			{
-				tree = safealloc(sizeof(fileentry_t));
-				head = tree;
-			}
-			else
-			{
-				tree->next = safealloc(sizeof(fileentry_t));
-				tree = tree->next;
-			}
+			(*entry_nr)++;
+		closedir(dp);
+	}
+	/* Opendir failed, create a single element */
+	else
+	{
+		tree = safealloc(sizeof(*tree));
+		*tree = safealloc(sizeof(**tree));
+		memset(*tree, '\0', sizeof(**tree));
 
+		(*tree)->size = -1;
+		switch(errno)
+		{
+			case EACCES:
+				strcpy((*tree)->name, "(inaccessible)");
+				break;
+			case EIO:
+				strcpy((*tree)->name, "(unreadable)");
+				break;
+			default:
+				strcpy((*tree)->name, "(on fire)");
+				break;
+		}
+		*entry_nr = 1;
+		return tree;
+	}
+
+	/* Allocate a chunk of memory to contain all the elements */
+	tree = safealloc(sizeof(*tree) * *entry_nr);
+	for(i=0; i<*entry_nr; i++)
+		tree[i] = safealloc(sizeof(*tree[i]));
+
+	/* Populate the directory listing */
+	if((dp = opendir(path)))
+	{
+		for(i = 0; i < *entry_nr; i++)
+		{
+			ep = readdir(dp);
 			/* Populate the first struct fields */
-			tree->type = ep->d_type;
-			strncpy(tree->name, ep->d_name, MAXLEN);
+			strcpy(tree[i]->name, ep->d_name);
 
 			/* Allocate space for the concatenation <path>/<filename> */
-			tmp = safealloc(sizeof(char) * (strlen(path) + strlen(tree->name) + 1 + 1));
-			sprintf(tmp, "%s/%s", path, tree->name);
+			tmp = safealloc(sizeof(*tmp) * (strlen(path) + strlen(tree[i]->name) + 1 + 1));
+			sprintf(tmp, "%s/%s", path, tree[i]->name);
 
 			/* Get file stats */
 			stat(tmp, &st);
 
 			/* Populate the remaining struct fields */
-			tree->size = st.st_size;
-			tree->uid = st.st_uid;
-			tree->gid = st.st_gid;
-			tree->mode = st.st_mode;
-			tree->lastchange = st.st_mtim.tv_sec;
+			tree[i]->size = st.st_size;
+			tree[i]->uid = st.st_uid;
+			tree[i]->gid = st.st_gid;
+			tree[i]->mode = st.st_mode;
+			tree[i]->lastchange = st.st_mtim.tv_sec;
 
 			free(tmp);
 		}
-		tree->next = NULL;
 		closedir(dp);
 	}
 	else
 	{
-		tree = safealloc(sizeof(fileentry_t));
-		head = tree;
-		memset(tree, '\0', sizeof(fileentry_t));
+		memset(*tree, '\0', sizeof(**tree));
 
-		tree->size = -1;
-		tree->type = -1;
+		(*tree)->size = -1;
 		switch(errno)
 		{
 			case EACCES:
-				strcpy(tree->name, "(inaccessible)");
+				strcpy((*tree)->name, "(forbidden)");
 				break;
 			case EIO:
-				strcpy(tree->name, "(unreadable)");
+				strcpy((*tree)->name, "(unreadable)");
 				break;
 			default:
-				strcpy(tree->name, "(on fire)");
+				strcpy((*tree)->name, "(on fire)");
 				break;
 		}
-		tree->next = NULL;
+		*entry_nr = 1;
+		return tree;
 	}
 
-	return head;
-}
-/* Free a fileentry_t linked list */
-void
-free_tree(fileentry_t* list)
-{
-	fileentry_t* next;
-
-	while(list != NULL)
-	{
-		next = list->next;
-		free(list);
-		list = next;
-	}
+	return tree;
 }
 
 /* XXX XXX XXX XXX XXX XXX XXX XXX XXX */
 /* Will exchange a->next with b->next */
 /* Edge cases are a bitch */
 void
-list_xchg(fileentry_t* a, fileentry_t* b)
+tree_xchg(fileentry_t** tree, int a, int b)
 {
 	fileentry_t* tmp;
 
-	assert(a->next);
-	assert(b->next);
+	assert(tree[a]);
+	assert(tree[b]);
 
-	tmp = a->next;
-	a->next = b->next;
-	b->next = tmp;
-
-	tmp = a->next->next;
-	a->next->next = b->next->next;
-	b->next->next = tmp;
+	tmp = tree[a];
+	tree[a] = tree[b];
+	tree[b] = tmp;
 }
 
 /* Alphabetically sort a directory listing, directories first
  * This looks ugly because I need to keep track of the element referencing
  * the one I'm looking at in order to exchange them efficiently */
 int
-sort_tree(fileentry_t* tree)
+sort_tree(struct direntry* dir)
 {
 	int done;
-	fileentry_t* tmpptr, *dirptr, *orderedptr, *list_begin;
-	fileentry_t* prevtmp, *prevdir;
+	int i, tmp_i, j;
+	char* tmp;
+	fileentry_t** tree = dir->tree;
 
 	if(!tree)
 		return -1;
-	if(!tree->next)
-		return 0;
 
 	/* Split directories and files first */
 	done = 0;
-	for(dirptr = prevdir = tree; dirptr->next != NULL && !done; prevdir = dirptr, dirptr=dirptr->next)
+	for(i=0; i<dir->count && !done; i++)
 	{
-		if(dirptr->type != DT_DIR)		/* This is not a directory */
+		if(!S_ISDIR(tree[i]->mode))
 		{
-			/* Find the next available directory */
-			prevtmp = dirptr;
-			for(tmpptr = dirptr->next; tmpptr != NULL && tmpptr->type != DT_DIR; prevtmp = tmpptr, tmpptr = tmpptr->next);
-			if(tmpptr == NULL)
+			for(j=i; j<dir->count && !S_ISDIR(tree[j]->mode); j++);
+			if(j == dir->count)
 				done = 1;
 			else
 			{
-				list_xchg(prevtmp, prevdir);
-				/* dirptr has changed, update it with the new value */
-				dirptr = prevdir->next;
+				tree_xchg(tree, i, j);
+				i--;
 			}
 		}
 	}
 
-	list_begin = tree;
-	prevdir = list_begin;
-	for(dirptr = list_begin->next; dirptr->next != NULL && dirptr->type == DT_DIR; prevdir = dirptr, dirptr = dirptr->next)
+	/* Sort directories */
+	for(i=0; i<dir->count && S_ISDIR(tree[i]->mode); i++)
 	{
-		done = 0;
-		for(prevtmp = NULL, orderedptr = list_begin; orderedptr != dirptr && !done; prevtmp = orderedptr, orderedptr = orderedptr->next)
+		tmp = tree[i]->name;
+		tmp_i = i;
+		for(j=i+1; j<dir->count && S_ISDIR(tree[j]->mode); j++)
 		{
-			assert(dirptr->name);
-			assert(orderedptr->name);
-			if(strcasecmp(dirptr->name, orderedptr->name) < 0)
+			if(strcasecmp(tmp, tree[j]->name) > 0)
 			{
-				assert(prevdir);
-				assert(dirptr);
-				assert(prevtmp);
-				/* Link the list removing dirptr, which is to be inserted */
-				prevdir->next = dirptr->next;
-
-				/* Insert dirptr in its correct place */
-				tmpptr = prevtmp->next;
-				prevtmp->next = dirptr;
-				dirptr->next = tmpptr;
-				done = 1;
+				tmp = tree[j]->name;
+				tmp_i = j;
 			}
 		}
+		if(i != tmp_i)
+			tree_xchg(tree, i, tmp_i);
 	}
 
-	list_begin = prevdir;
-	for(dirptr = list_begin->next; dirptr != NULL; prevdir = dirptr, dirptr = dirptr->next)
+	/* Sort files */
+	for(; i<dir->count; i++)
 	{
-		done = 0;
-		for(prevtmp = list_begin, orderedptr = list_begin->next; orderedptr != dirptr && !done; prevtmp = orderedptr, orderedptr = orderedptr->next)
+		tmp = tree[i]->name;
+		tmp_i = i;
+		for(j=i+1; j<dir->count; j++)
 		{
-			assert(dirptr->name);
-			assert(orderedptr->name);
-			if(strcasecmp(dirptr->name, orderedptr->name) < 0)
+			if(strcasecmp(tmp, tree[j]->name) > 0)
 			{
-				assert(prevdir);
-				assert(dirptr);
-				assert(prevtmp);
-				prevdir->next = dirptr->next;
-
-				tmpptr = prevtmp->next;
-				prevtmp->next = dirptr;
-				dirptr->next = tmpptr;
-				done = 1;
+				tmp = tree[j]->name;
+				tmp_i = j;
 			}
 		}
+		if(i != tmp_i)
+			tree_xchg(tree, i, tmp_i);
 	}
+
 	return 0;
 }/*}}}*/

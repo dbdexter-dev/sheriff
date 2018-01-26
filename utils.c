@@ -5,6 +5,13 @@
 #include "utils.h"
 
 void
+die(char* msg)
+{
+	fprintf(stderr, "[FATAL]: %s >.<\n", msg);
+	exit(1);
+}
+
+void
 octal_to_str(int oct, char str[])
 {
 	int i;
@@ -50,15 +57,23 @@ safealloc(size_t s)
 int
 strchomp(const char* src, char* dst, const int maxlen)
 {
+	int i;
 	if(!src)
+	{
+		dst[0] = 0;
 		return 1;
+	}
 
-	strncpy(dst, src, maxlen);
-	if(strlen(src) <= maxlen)
-		return 0;
+	for(i=0; src[i] != '\0' && i < maxlen - 1; i++)
+		dst[i] = src[i];
 
-	dst[maxlen-1] = '~';
-	dst[maxlen] = '\0';
+	if(src[i] == '\0')
+		dst[i] = '\0';     /* Apparently strncpy does not always add '\0' */
+	else
+	{
+		dst[maxlen-2] = '~';
+		dst[maxlen-1] = '\0';
+	}
 
 	return 0;
 }

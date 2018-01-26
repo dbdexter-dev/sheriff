@@ -10,7 +10,7 @@ typedef struct fileentry
 {
 	char name[MAXLEN];
 	unsigned long size;
-	unsigned char type;
+	char type;
 	uid_t uid, gid;
 	mode_t mode;
 	time_t lastchange;

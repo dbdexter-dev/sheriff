@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -24,13 +25,15 @@ free_listing(struct direntry** direntry)
 	if(!(*direntry))
 		return 0;
 
-	if(!(*direntry)->tree || !(*direntry)->path)
-		return 1;
+	if((*direntry)->tree)
+		free_tree((*direntry)->tree);
 
-	free_tree((*direntry)->tree);
-	free((*direntry)->path);
+	if((*direntry)->path)
+		free((*direntry)->path);
+
 	free((*direntry));
 	*direntry = NULL;
+
 
 	return 0;
 }
@@ -55,7 +58,8 @@ init_listing(struct direntry** direntry, char* path)
 	/* Find the tree size */
 	(*direntry)->tree_size = 0;
 	for(tmp = (*direntry)->tree; tmp != NULL; tmp=tmp->next, (*direntry)->tree_size++);
-	try_select(*direntry, 0);
+	(*direntry)->sel = (*direntry)->tree;
+	(*direntry)->sel_idx = 0;
 
 	return 0;
 }
@@ -67,16 +71,22 @@ try_select(struct direntry* direntry, int idx)
 	int i;
 
 	if(idx >= direntry->tree_size)
-		direntry->sel_idx = direntry->tree_size - 1;
+		idx = direntry->tree_size - 1;
 	else if (idx < 0)
-		direntry->sel_idx = 0;
-	else
-		direntry->sel_idx = idx;
+		idx = 0;
 
 	/* Update the sel pointer to the currently selected entry */
-	direntry->sel = direntry->tree;
-	for(i=0; i<direntry->sel_idx; i++, direntry->sel = direntry->sel->next);
-
+	if(idx == direntry->sel_idx + 1)
+	{
+		direntry->sel_idx = idx;
+		direntry->sel = direntry->sel->next;
+	}
+	else
+	{
+		direntry->sel_idx = idx;
+		for(i=0, direntry->sel = direntry->tree; i<direntry->sel_idx;
+		    i++, direntry->sel = direntry->sel->next);
+	}
 	return direntry->sel_idx;
 }
 
@@ -112,7 +122,7 @@ dirlist(char* path)
 			tree->type = ep->d_type;
 			strncpy(tree->name, ep->d_name, MAXLEN);
 
-			/* Allocate space for the concatenation <path>.<filename> */
+			/* Allocate space for the concatenation <path>/<filename> */
 			tmp = safealloc(sizeof(char) * (strlen(path) + strlen(tree->name) + 1 + 1));
 			sprintf(tmp, "%s/%s", path, tree->name);
 
@@ -132,7 +142,27 @@ dirlist(char* path)
 		closedir(dp);
 	}
 	else
-		return NULL;
+	{
+		tree = safealloc(sizeof(fileentry_t));
+		head = tree;
+		memset(tree, '\0', sizeof(fileentry_t));
+
+		tree->size = -1;
+		tree->type = -1;
+		switch(errno)
+		{
+			case EACCES:
+				strcpy(tree->name, "(inaccessible)");
+				break;
+			case EIO:
+				strcpy(tree->name, "(unreadable)");
+				break;
+			default:
+				strcpy(tree->name, "(on fire)");
+				break;
+		}
+		tree->next = NULL;
+	}
 
 	return head;
 }
@@ -140,7 +170,6 @@ dirlist(char* path)
 void
 free_tree(fileentry_t* list)
 {
-	int status;
 	fileentry_t* next;
 
 	while(list != NULL)
@@ -183,6 +212,8 @@ sort_tree(fileentry_t* tree)
 
 	if(!tree)
 		return -1;
+	if(!tree->next)
+		return 0;
 
 	/* Split directories and files first */
 	done = 0;
@@ -210,6 +241,9 @@ sort_tree(fileentry_t* tree)
 	{
 		done = 0;
 		for(prevtmp = NULL, orderedptr = list_begin; orderedptr != dirptr && !done; prevtmp = orderedptr, orderedptr = orderedptr->next)
+		{
+			assert(dirptr->name);
+			assert(orderedptr->name);
 			if(strcasecmp(dirptr->name, orderedptr->name) < 0)
 			{
 				assert(prevdir);
@@ -224,6 +258,7 @@ sort_tree(fileentry_t* tree)
 				dirptr->next = tmpptr;
 				done = 1;
 			}
+		}
 	}
 
 	list_begin = prevdir;
@@ -231,6 +266,9 @@ sort_tree(fileentry_t* tree)
 	{
 		done = 0;
 		for(prevtmp = list_begin, orderedptr = list_begin->next; orderedptr != dirptr && !done; prevtmp = orderedptr, orderedptr = orderedptr->next)
+		{
+			assert(dirptr->name);
+			assert(orderedptr->name);
 			if(strcasecmp(dirptr->name, orderedptr->name) < 0)
 			{
 				assert(prevdir);
@@ -243,6 +281,7 @@ sort_tree(fileentry_t* tree)
 				dirptr->next = tmpptr;
 				done = 1;
 			}
+		}
 	}
 	return 0;
 }/*}}}*/

@@ -26,6 +26,7 @@
 #define PAIR_WHITE_DEF 3
 #define PAIR_CYAN_DEF 4
 #define PAIR_YELLOW_DEF 5
+#define PAIR_RED_DEF 6
 
 #define LENGTH(X) sizeof(X) / sizeof(X[0])
 
@@ -225,6 +226,7 @@ init_colors(void)
 	init_pair(PAIR_WHITE_DEF, COLOR_WHITE, -1);
 	init_pair(PAIR_CYAN_DEF, COLOR_CYAN, -1);
 	init_pair(PAIR_YELLOW_DEF, COLOR_YELLOW, -1);
+	init_pair(PAIR_RED_DEF, COLOR_RED, -1);
 }
 
 /* Update the bottom status bar
@@ -288,6 +290,7 @@ resize_handler(int sig)
 	/* Re-initialize ncurses with the correct dimensions */
 	endwin();
 	refresh();
+	erase();
 	getmaxyx(stdscr, nr, nc);
 
 	mc = nc * MAIN_PERC;
@@ -356,6 +359,9 @@ refresh_listing(Dirview* win, int show_sizes)
 		/* Change color based on the entry type */
 		switch(tmptree->type)
 		{
+			case -1:
+				wattrset(win->win, COLOR_PAIR(PAIR_RED_DEF));
+				break;
 			case DT_LNK:
 				wattrset(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
 				break;
@@ -374,7 +380,7 @@ refresh_listing(Dirview* win, int show_sizes)
 				break;
 		}
 		/* Chomp string so that it fits in the window */
-		if(!show_sizes)
+		if(!show_sizes || tmptree->size < 0)
 		{
 			strchomp(tmptree->name, tmpstring, mc - 1);
 			wprintw(win->win, "%s\n", tmpstring);
@@ -421,7 +427,7 @@ try_highlight(Dirview* win, int idx)
 	else if(idx < 0 && win->offset > 0)
 	{
 		win->offset += idx;
-		idx++;
+		idx = 0;
 	}
 
 	getyx(win->win, savedrow, savedcol);

@@ -18,6 +18,8 @@
 #include <stdio.h>
 
 static fileentry_t** dirlist(char* path, int* size);
+static int           quicksort_pass(fileentry_t** dir, int istart, int iend);
+static void          quicksort(fileentry_t** dir, int istart, int iend);
 static void          tree_xchg(fileentry_t** tree, int a, int b);
 static int           sort_tree(struct direntry* dir);
 
@@ -189,21 +191,61 @@ dirlist(char* path, int* entry_nr)
 	return tree;
 }
 
-/* XXX XXX XXX XXX XXX XXX XXX XXX XXX */
-/* Will exchange a->next with b->next */
-/* Edge cases are a bitch */
-void
-tree_xchg(fileentry_t** tree, int a, int b)
+/* Implementation of the quicksort algorithm, center element is the pivot */
+int
+quicksort_pass(fileentry_t** tree, int istart, int iend)
 {
-	fileentry_t* tmp;
+	int i, r, pi;
+	char* pivot;
 
-	assert(tree[a]);
-	assert(tree[b]);
+	pi = (istart+iend)/2;
+	pivot = tree[pi]->name;
+	tree_xchg(tree, pi, iend);
 
-	tmp = tree[a];
-	tree[a] = tree[b];
-	tree[b] = tmp;
+	r = istart;   /* Right ordered partition index */
+	for(i=istart; i < iend; i++)
+	{
+		if(strcasecmp(tree[i]->name, pivot) < 0)
+			tree_xchg(tree, i, r++);
+	}
+	tree_xchg(tree, r, iend);
+	return r;
 }
+
+void
+quicksort(fileentry_t** tree, int istart, int iend)
+{
+	int* stack;
+	int sp;
+	int p;
+
+	if(istart >= iend)
+		return;
+
+	stack = safealloc(sizeof(*stack) * (iend - istart + 1));
+	sp = 0;
+
+	stack[sp++] = istart;
+	stack[sp++] = iend;
+	while(sp > 0)
+	{
+		iend = stack[--sp];
+		istart = stack[--sp];
+		p = quicksort_pass(tree, istart, iend);
+		if(p-1 > istart)
+		{
+			stack[sp++] = istart;
+			stack[sp++] = p-1;
+		}
+		if(p+1 < iend)
+		{
+			stack[sp++] = p+1;
+			stack[sp++] = iend;
+		}
+	}
+	free(stack);
+}
+
 
 /* Alphabetically sort a directory listing, directories first
  * This looks ugly because I need to keep track of the element referencing
@@ -211,64 +253,36 @@ tree_xchg(fileentry_t** tree, int a, int b)
 int
 sort_tree(struct direntry* dir)
 {
-	int done;
-	int i, tmp_i, j;
-	char* tmp;
+	int i, j;
 	fileentry_t** tree = dir->tree;
 
 	if(!tree)
 		return -1;
 
-	/* Split directories and files first */
-	done = 0;
-	for(i=0; i<dir->count && !done; i++)
-	{
+	/* Split directories and files first.
+	 * j points to the beginning of the files, i to the end of the directories.
+	 * What lies in between has yet to be sorted */
+	j = dir->count - 1;
+	for(i=0; i<j; i++)
 		if(!S_ISDIR(tree[i]->mode))
 		{
-			for(j=i; j<dir->count && !S_ISDIR(tree[j]->mode); j++);
-			if(j == dir->count)
-				done = 1;
-			else
-			{
-				tree_xchg(tree, i, j);
-				i--;
-			}
+			for(; j>i && !S_ISDIR(tree[j]->mode); j--);
+			tree_xchg(tree, i, j);
 		}
-	}
-
 	/* Sort directories */
-	for(i=0; i<dir->count && S_ISDIR(tree[i]->mode); i++)
-	{
-		tmp = tree[i]->name;
-		tmp_i = i;
-		for(j=i+1; j<dir->count && S_ISDIR(tree[j]->mode); j++)
-		{
-			if(strcasecmp(tmp, tree[j]->name) > 0)
-			{
-				tmp = tree[j]->name;
-				tmp_i = j;
-			}
-		}
-		if(i != tmp_i)
-			tree_xchg(tree, i, tmp_i);
-	}
+	quicksort(dir->tree, 0, j - 1);
 
 	/* Sort files */
-	for(; i<dir->count; i++)
-	{
-		tmp = tree[i]->name;
-		tmp_i = i;
-		for(j=i+1; j<dir->count; j++)
-		{
-			if(strcasecmp(tmp, tree[j]->name) > 0)
-			{
-				tmp = tree[j]->name;
-				tmp_i = j;
-			}
-		}
-		if(i != tmp_i)
-			tree_xchg(tree, i, tmp_i);
-	}
-
+	quicksort(dir->tree, j, dir->count-1);
 	return 0;
-}/*}}}*/
+}
+
+inline void
+tree_xchg(fileentry_t** tree, int a, int b)
+{
+	fileentry_t* tmp;
+	tmp = tree[a];
+	tree[a] = tree[b];
+	tree[b] = tmp;
+}
+/*}}}*/

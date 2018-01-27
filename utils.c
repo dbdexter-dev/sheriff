@@ -87,45 +87,17 @@ tohuman(unsigned long bytes, char* human)
 	int exp_3;
 
 	assert(human);
-
-	/* Integer divide until the last moment */
-	for(exp_3 = 0, fbytes = bytes; fbytes > 1000; fbytes /= 1000, exp_3++);
-	if(fbytes >= 100)
-		sprintf(human, "%3.f %c", fbytes, suffix[exp_3]);
-	else if(fbytes >= 10)
-		sprintf(human, "%3.1f %c", fbytes, suffix[exp_3]);
+	if(bytes < 1000)
+		sprintf(human, "%lu %c", bytes, suffix[0]);
 	else
-		sprintf(human, "%3.2f %c", fbytes, suffix[exp_3]);
-}
-
-int
-wdshorten(const char* src, char* dest, const unsigned destsize)
-{
-	assert(src);
-	assert(dest);
-
-	int count;
-	if(src == NULL || dest == NULL)
-		return -1;
-
-	for(; *src != '\0'; src++)
 	{
-		if(*src == '/')
-		{
-			if(*(src+1) == '.')
-				count = 3;
-			else
-				count = 2;
-
-			if(count > destsize)
-			{
-				*dest = '\0';
-				return 1;
-			}
-			for(; count>0; count--)
-				*dest++ = *src++;
-		}
+		/* Integer divide until the last moment */
+		for(exp_3 = 0, fbytes = bytes; fbytes > 1000; fbytes /= 1000, exp_3++);
+		if(fbytes >= 100)
+			sprintf(human, "%3.f %c", fbytes, suffix[exp_3]);
+		else if(fbytes >= 10)
+			sprintf(human, "%3.1f %c", fbytes, suffix[exp_3]);
+		else
+			sprintf(human, "%3.2f %c", fbytes, suffix[exp_3]);
 	}
-	*dest = '\0';
-	return 0;
 }

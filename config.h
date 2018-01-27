@@ -30,10 +30,10 @@ static Key keys[] = {
 	{ 'k',          rel_highlight,      {.i = -1}},
 	{ 'h',          navigate,           {.i = -1}},
 	{ 'l',          navigate,           {.i = +1}},
-	{ KEY_DOWN,     rel_highlight,      {.i = +1}},
 	{ KEY_UP,       rel_highlight,      {.i = -1}},
-	{ KEY_LEFT,     exit_directory,     {0}},
-	{ KEY_RIGHT,    enter_directory,    {0}},
+	{ KEY_DOWN,     rel_highlight,      {.i = +1}},
+	{ KEY_LEFT,     navigate,           {.i = -1}},
+	{ KEY_RIGHT,    navigate,           {.i = +1}},
 	{ '/',          filesearch,         {.i = +1}},
 	{ '?',          filesearch,         {.i = -1}},
 };

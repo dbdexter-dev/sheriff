@@ -14,12 +14,23 @@ typedef struct
 	const Arg arg;
 } Key;
 
+typedef struct
+{
+	char* ext;
+	char* cmd;
+} Assoc;
+
+static Assoc associations[] = {
+	{ ".pdf",   "zathura"},
+};
+
+
 
 static Key keys[] = {
 	{ 'j',          rel_highlight,      {.i = +1}},
 	{ 'k',          rel_highlight,      {.i = -1}},
-	{ 'h',          exit_directory,     {0}},
-	{ 'l',          enter_directory,    {0}},
+	{ 'h',          navigate,           {.i = -1}},
+	{ 'l',          navigate,           {.i = +1}},
 	{ KEY_DOWN,     rel_highlight,      {.i = +1}},
 	{ KEY_UP,       rel_highlight,      {.i = -1}},
 	{ KEY_LEFT,     exit_directory,     {0}},

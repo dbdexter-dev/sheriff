@@ -1,12 +1,12 @@
 SRC=$(wildcard *.c)
 OBJ=${SRC:.c=.o}
 
-CFLAGS = -pipe
-LDFLAGS = -lncurses
+CFLAGS =-pipe -Wall
+LDFLAGS =-lncurses
 
 all: debug
 
-debug : CFLAGS += -g
+debug : CFLAGS += -g -Werror
 debug: sheriff
 
 release : CFLAGS += -O2 -march=native -mtune=native

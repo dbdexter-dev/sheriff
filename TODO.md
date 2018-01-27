@@ -6,6 +6,7 @@
 * Implement file moving/deleting/yanking
 * Implement file selection
 * Add tabbed navigation
+* Asynchronous directory updates (i.e. don't lock up when copying files)
 
 # Dir.c/Backend.c
 * Implement directory list caching

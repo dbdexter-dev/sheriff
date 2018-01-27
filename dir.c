@@ -29,7 +29,7 @@ free_listing(struct direntry** direntry)
 {
 	int i;
 
-	if(!(*direntry))
+	if(!direntry)
 		return 0;
 
 	if((*direntry)->tree)
@@ -39,7 +39,6 @@ free_listing(struct direntry** direntry)
 		free((*direntry)->tree);
 		(*direntry)->tree = NULL;
 	}
-
 	if((*direntry)->path)
 	{
 		free((*direntry)->path);
@@ -83,7 +82,6 @@ init_listing(struct direntry** direntry, char* path)
 	else
 		(*direntry)->path = NULL;
 
-	/* Find the tree size */
 	(*direntry)->sel_idx = 0;
 
 	return 0;

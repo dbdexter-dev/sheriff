@@ -9,13 +9,6 @@
 
 typedef struct
 {
-	int key;
-	void(*funct)(const Arg* arg);
-	const Arg arg;
-} Key;
-
-typedef struct
-{
 	char* ext;
 	char* cmd;
 } Assoc;
@@ -23,6 +16,17 @@ typedef struct
 static Assoc associations[] = {
 	{ ".pdf",   "zathura"},
 	{ ".c",     "nvim"},
+	{ NULL,     NULL},
+};
+
+static Key yank_keys[] = {
+	{ 'y',          yank_cur,           {.i = 1}},
+	{ '\0',         NULL,               {0}},
+};
+
+static Key delete_keys[] = {
+	{ 'd',          yank_cur,           {.i = 0}},
+	{ '\0',         NULL,               {0}},
 };
 
 static Key keys[] = {
@@ -36,6 +40,10 @@ static Key keys[] = {
 	{ KEY_RIGHT,    navigate,           {.i = +1}},
 	{ '/',          filesearch,         {.i = +1}},
 	{ '?',          filesearch,         {.i = -1}},
+	{ 'y',          multibind,          {.v = yank_keys}},
+	{ 'd',          multibind,          {.v = delete_keys}},
+	{ 'p',          paste_cur,          {0}},
+	{ '\0',         NULL,               {0}},
 };
 
 #endif

@@ -73,6 +73,8 @@ navigate_fwd(Dirview* left, Dirview* center, Dirview* right)
 	return 0;
 }
 
+/* Update a window with a given path, leaf can be NULL, in that case the window
+ * in question is initialized using *parent as the path */
 int
 update_win_with_path(Dirview* win, char* parent, fileentry_t* leaf)
 {

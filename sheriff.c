@@ -16,13 +16,12 @@
 #include <unistd.h>
 #include "backend.h"
 #include "dir.h"
+#include "fileops.h"
 #include "ncutils.h"
 #include "utils.h"
 
 #define MAIN_PERC 0.6
 #define MAXSEARCHLEN MAXCMDLEN
-
-#define LENGTH(X) sizeof(X) / sizeof(X[0])
 
 typedef union
 {
@@ -30,20 +29,32 @@ typedef union
 	void* v;
 } Arg;
 
+typedef struct
+{
+	int key;
+	void(*funct)(const Arg* arg);
+	const Arg arg;
+} Key;
+
+
 static void  enter_directory();
 static void  exit_directory();
 static void  resize_handler();
 static void  xdg_open(struct direntry* file);
 
-static void  navigate(const Arg* arg);
 static void  filesearch(const Arg* arg);
+static void  multibind(const Arg* arg);
+static void  navigate(const Arg* arg);
+static void  paste_cur(const Arg* arg);
 static void  rel_highlight(const Arg* arg);
+static void  yank_cur(const Arg* arg);
 
 /* This is the only variable I can't make non-global
  * since it is needed by the SIGWINCH handler and the various
  * keybind handlers
  */
 Dirview main_view[WIN_NR];
+Filebuffer yankbuf;
 
 /* Keybind handlers {{{*/
 
@@ -89,6 +100,33 @@ filesearch(const Arg* arg)
 	}
 }
 
+
+/* Meta-keybinding function, so that you can chain multiple characters together
+ * to perform a single action */
+void
+multibind(const Arg* arg)
+{
+	wchar_t ch;
+	int i;
+	Key* binds = arg->v;
+
+	do
+	{
+		/* Handle resize events while waiting for input */
+		ch = wgetch(main_view[BOT_WIN].win);
+		if(ch == KEY_RESIZE)
+			resize_handler();
+		/* Exit means exit, duh */
+		else if (ch != KEY_EXIT)
+		{
+			for(i=0; binds[i].key != '\0'; i++)
+				if(ch == binds[i].key)
+					binds[i].funct(&binds[i].arg);
+		}
+	}
+	while(ch == KEY_RESIZE);
+}
+
 /* Handle navigation, either forward or backwards, through directories or
  * files */
 void
@@ -111,6 +149,36 @@ navigate(const Arg* arg)
 		exit_directory();
 }
 
+void
+paste_cur(const Arg* arg)
+{
+	char* tmp;
+	struct direntry* dir = main_view[CENTER_WIN].dir;
+	/* No file selected, exit */
+	if(!yankbuf.file)
+		return;
+
+	if(move_file(yankbuf.file, dir->path, yankbuf.preserve_src))
+		die("Paste failed!");
+
+	/* Clear yank buffer */
+	free(yankbuf.file);
+	yankbuf.file = NULL;
+
+	dialog(main_view + BOT_WIN, "Selection pasted", NULL);
+
+	/* Temporarily save the path we're in since we'll be freed during the
+	 * update_win_with_path, but we want dir->path to exist long enough for the
+	 * window to be initialized with it */
+	tmp = safealloc(sizeof(*tmp) * (strlen(dir->path) + 1));
+	strcpy(tmp, dir->path);
+	update_win_with_path(main_view + CENTER_WIN, tmp, NULL);
+	free(tmp);
+
+	associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
+	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
+	refresh_listing(main_view + CENTER_WIN, 1);
+}
 /* Highlight a file in the center window given an offset from the currently
  * highlighted index (offset in arg->i)*/
 void
@@ -143,6 +211,25 @@ rel_highlight(const Arg* arg)
 		refresh_listing(main_view + CENTER_WIN, 1);
 	else
 		wrefresh(main_view[CENTER_WIN].win);
+
+	print_status_top(main_view + TOP_WIN);
+	print_status_bottom(main_view + BOT_WIN);
+}
+
+void
+yank_cur(const Arg* arg)
+{
+	const char* cw_wd = main_view[CENTER_WIN].dir->path;
+	const char* cw_selname = main_view[CENTER_WIN].dir->tree[main_view[CENTER_WIN].dir->sel_idx]->name;
+
+	if(yankbuf.file)
+		free(yankbuf.file);
+
+	yankbuf.file = safealloc(sizeof(*yankbuf.file) * (strlen(cw_wd) + strlen(cw_selname) + 1 + 1));
+	sprintf(yankbuf.file, "%s/%s", cw_wd, cw_selname);
+	yankbuf.preserve_src = arg->i;
+
+	dialog(main_view + BOT_WIN, "Selection yanked", NULL);
 }
 /*}}}*/
 #include "config.h"
@@ -166,6 +253,8 @@ enter_directory()
 	refresh_listing(main_view + LEFT_WIN, 0);
 	refresh_listing(main_view + CENTER_WIN, 1);
 	refresh_listing(main_view + RIGHT_WIN, 0);
+	print_status_top(main_view + TOP_WIN);
+	print_status_bottom(main_view + BOT_WIN);
 }
 
 /* Navigate backwards in the directory tree, into the parent of the center
@@ -183,6 +272,8 @@ exit_directory()
 	refresh_listing(main_view + LEFT_WIN, 0);
 	refresh_listing(main_view + CENTER_WIN, 1);
 	refresh_listing(main_view + RIGHT_WIN, 0);
+	print_status_top(main_view + TOP_WIN);
+	print_status_bottom(main_view + BOT_WIN);
 }
 
 /* Handler that takes care of resizing the subviews when a SIGWINCH is received.
@@ -249,7 +340,7 @@ xdg_open(struct direntry* dir)
 	/* If the file has an extension, check if it's already associated to a
 	 * command to run */
 	if(*ext == '.')
-		for(i=0; i<LENGTH(associations) && !associated; i++)
+		for(i=0; associations[i].ext != NULL && !associated; i++)
 			if(!strcmp(associations[i].ext, ext))
 			{
 				associated = 1;
@@ -283,6 +374,9 @@ main(int argc, char* argv[])
 {
 	int i, max_row, max_col;
 	wchar_t ch;
+
+	/* Initialize the yank buffer */
+	memset(&yankbuf, '\0', sizeof(yankbuf));
 
 	/* Initialize ncurses */
 	initscr();                            /* Initialize ncurses sesion */
@@ -320,16 +414,13 @@ main(int argc, char* argv[])
 		/* Call the function associated with the key pressed */
 		if(ch == KEY_RESIZE)
 			resize_handler();
-		for(i=0; i<LENGTH(keys); i++)
+		for(i=0; keys[i].key != '\0'; i++)
 			if(ch == keys[i].key)
 			{
 				keys[i].funct(&keys[i].arg);
 				break;
 			}
 
-		/* Update the status bars every time a key is pressed */
-		print_status_top(main_view + TOP_WIN);
-		print_status_bottom(main_view + BOT_WIN);
 	}
 
 	/* Terminate ncurses session */

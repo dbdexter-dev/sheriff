@@ -49,22 +49,24 @@ deinit_windows(Dirview view[WIN_NR])
 }
 
 /* Render a dialog prompt in a specified window. Will return the input string
- * through char* input */
+ * through char* input, or just print msg if input == NULL*/
 void
 dialog(Dirview* win, char* msg, char* input)
 {
 	werase(win->win);
 	wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
 	mvwprintw(win->win, 0, 0, msg);
+	if(input)
+	{
+		echo();
+		curs_set(1);
 
-	echo();
-	curs_set(1);
+		wgetnstr(win->win, input, MAXCMDLEN);
+		werase(win->win);
 
-	wgetnstr(win->win, input, MAXCMDLEN);
-	werase(win->win);
-
-	curs_set(0);
-	noecho();
+		curs_set(0);
+		noecho();
+	}
 }
 
 /* Initialize color pairs */
@@ -125,8 +127,9 @@ print_status_bottom(Dirview* win)
 	werase(win->win);
 	wattrset(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
 	// TODO: mode to string
-	mvwprintw(win->win, 0, 0, "%s  %d  %d  %s",
-	          mode, sel->uid, sel->gid, last_modified);
+	mvwprintw(win->win, 0, 0, "%s ", mode);
+	wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
+	wprintw(win->win," %d  %d  %s", sel->uid, sel->gid, last_modified);
 
 	wrefresh(win->win);
 }

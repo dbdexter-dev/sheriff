@@ -32,7 +32,7 @@ typedef union
 
 static void  enter_directory();
 static void  exit_directory();
-static void  resize_handler(int sig);
+static void  resize_handler();
 static void  xdg_open(struct direntry* file);
 
 static void  navigate(const Arg* arg);
@@ -46,44 +46,6 @@ static void  rel_highlight(const Arg* arg);
 Dirview main_view[WIN_NR];
 
 /* Keybind handlers {{{*/
-
-/* Navigate to the directory selected in the center window */
-void
-enter_directory()
-{
-	/* If type < 0, it's not even a file, but a message (e.g. "inaccessible"):
-	 * don't attempt a cd, just exit */
-	if(main_view[CENTER_WIN].dir->tree[main_view[CENTER_WIN].dir->sel_idx]->mode == 0)
-		return;
-
-	if(navigate_fwd(main_view + LEFT_WIN, main_view + CENTER_WIN, main_view + RIGHT_WIN))
-		die("Couldn't navigate_fwd");
-	/* Update the top and bottom bars to reflect the change in the center
-	 * window, then refresh the main views. The two bar-windows are updated
-	 * every time something happens anyway in the main control loop */
-	associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
-	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
-	refresh_listing(main_view + LEFT_WIN, 0);
-	refresh_listing(main_view + CENTER_WIN, 1);
-	refresh_listing(main_view + RIGHT_WIN, 0);
-}
-
-/* Navigate backwards in the directory tree, into the parent of the center
- * window */
-void
-exit_directory()
-{
-	if(navigate_back(main_view + LEFT_WIN, main_view + CENTER_WIN, main_view + RIGHT_WIN))
-		die("Couldn't navigate_back");
-	/* As in enter_directory, update the directories associated to the top and
-	 * bottom bars, and update the views since we've changed their underlying
-	 * associations */
-	associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
-	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
-	refresh_listing(main_view + LEFT_WIN, 0);
-	refresh_listing(main_view + CENTER_WIN, 1);
-	refresh_listing(main_view + RIGHT_WIN, 0);
-}
 
 /* File search, both forwards and backwards, depending on the value of arg->i */
 void
@@ -181,49 +143,57 @@ rel_highlight(const Arg* arg)
 /*}}}*/
 #include "config.h"
 
-
-
-/* Initialize the sub-windows that make up the main view */
-int
-init_windows(Dirview view[WIN_NR], int row, int col, float main_perc)
+/* Navigate to the directory selected in the center window */
+void
+enter_directory()
 {
-	int i, mc, sc_l, sc_r;
+	/* If type < 0, it's not even a file, but a message (e.g. "inaccessible"):
+	 * don't attempt a cd, just exit */
+	if(main_view[CENTER_WIN].dir->tree[main_view[CENTER_WIN].dir->sel_idx]->mode == 0)
+		return;
 
-	if(!view)
-		return -1;
-
-	/* Calculate center window and sidebars column count */
-	mc = col * main_perc;
-	sc_r = (col - mc) / 2;
-	sc_l = col - mc - sc_r;
-
-	view[TOP_WIN].win = newwin(1, col, 0, 0);
-	view[BOT_WIN].win = newwin(1, col, row - 1, 0);
-	view[LEFT_WIN].win = newwin(row - 2, sc_l - 1, 1, 0);
-	view[CENTER_WIN].win = newwin(row - 2, mc - 1, 1, sc_l);
-	view[RIGHT_WIN].win = newwin(row - 2, sc_r, 1, sc_l + mc);
-
-	/* Initialize the view offsets */
-	for(i=0; i<WIN_NR; i++)
-		view[i].offset = 0;
-
-	return 0;
+	if(navigate_fwd(main_view + LEFT_WIN, main_view + CENTER_WIN, main_view + RIGHT_WIN))
+		die("Couldn't navigate_fwd");
+	/* Update the top and bottom bars to reflect the change in the center
+	 * window, then refresh the main views. The two bar-windows are updated
+	 * every time something happens anyway in the main control loop */
+	associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
+	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
+	refresh_listing(main_view + LEFT_WIN, 0);
+	refresh_listing(main_view + CENTER_WIN, 1);
+	refresh_listing(main_view + RIGHT_WIN, 0);
 }
 
-
+/* Navigate backwards in the directory tree, into the parent of the center
+ * window */
+void
+exit_directory()
+{
+	if(navigate_back(main_view + LEFT_WIN, main_view + CENTER_WIN, main_view + RIGHT_WIN))
+		die("Couldn't navigate_back");
+	/* As in enter_directory, update the directories associated to the top and
+	 * bottom bars, and update the views since we've changed their underlying
+	 * associations */
+	associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
+	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
+	refresh_listing(main_view + LEFT_WIN, 0);
+	refresh_listing(main_view + CENTER_WIN, 1);
+	refresh_listing(main_view + RIGHT_WIN, 0);
+}
 
 /* Handler that takes care of resizing the subviews when a SIGWINCH is received.
  * This function is one of the reasons why there has to be a global array of
  * Dirview ptrs */
 void
-resize_handler(int sig)
+resize_handler()
 {
 	int i, nr, nc, mc, sc_l, sc_r;
 
 	/* Re-initialize ncurses with the correct dimensions */
+	werase(stdscr);
 	endwin();
+
 	refresh();
-	erase();
 	getmaxyx(stdscr, nr, nc);
 
 	mc = nc * MAIN_PERC;
@@ -268,8 +238,12 @@ xdg_open(struct direntry* dir)
 	fname = safealloc(sizeof(*fname) * (strlen(dir->path) + strlen(dir->tree[dir->sel_idx]->name) + 1 + 1));
 	sprintf(fname, "%s/%s", dir->path, dir->tree[dir->sel_idx]->name);
 
+	/* Extract the file extension, if one exists */
 	associated = 0;
 	for(ext = fname; *ext != '.' && *ext != '\0'; ext++);
+
+	/* If the file has an extension, check if it's already associated to a
+	 * command to run */
 	if(*ext == '.')
 		for(i=0; i<LENGTH(associations) && !associated; i++)
 			if(!strcmp(associations[i].ext, ext))
@@ -307,7 +281,6 @@ main(int argc, char* argv[])
 	wchar_t ch;
 
 	/* Initialize ncurses */
-	signal(SIGWINCH, resize_handler);     /* Register the resize handler */
 	initscr();                            /* Initialize ncurses sesion */
 	noecho();                             /* Don't echo keys pressed */
 	cbreak();                             /* Quasi-raw input */
@@ -322,14 +295,15 @@ main(int argc, char* argv[])
 	init_listing(&(main_view[CENTER_WIN].dir), "./");
 	init_listing(&(main_view[RIGHT_WIN].dir), "./");
 
-	/* Associate status bars to the main direntry */
-	main_view[TOP_WIN].dir = main_view[CENTER_WIN].dir;
-	main_view[BOT_WIN].dir = main_view[CENTER_WIN].dir;
+	/* Associate status bars with the main direntry */
+	associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
+	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
 
 	init_colors();
 	init_windows(main_view, max_row, max_col, MAIN_PERC);
 	keypad(main_view[BOT_WIN].win, TRUE);
 
+	/* Initial screen update */
 	refresh_listing(main_view + LEFT_WIN, 0);
 	refresh_listing(main_view + CENTER_WIN, 1);
 	refresh_listing(main_view + RIGHT_WIN, 0);
@@ -340,13 +314,17 @@ main(int argc, char* argv[])
 	while((ch = wgetch(main_view[BOT_WIN].win)) != 'q')
 	{
 		/* Call the function associated with the key pressed */
+		if(ch == KEY_RESIZE)
+			resize_handler();
 		for(i=0; i<LENGTH(keys); i++)
 			if(ch == keys[i].key)
 				keys[i].funct(&keys[i].arg);
 
+		/* Update the status bars every time a key is pressed */
 		print_status_top(main_view + TOP_WIN);
 		print_status_bottom(main_view + BOT_WIN);
 	}
+
 	/* Terminate ncurses session */
 	deinit_windows(main_view);
 	endwin();

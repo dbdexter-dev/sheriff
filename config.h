@@ -9,7 +9,7 @@
 
 typedef struct
 {
-	wchar_t key;
+	int key;
 	void(*funct)(const Arg* arg);
 	const Arg arg;
 } Key;
@@ -22,9 +22,8 @@ typedef struct
 
 static Assoc associations[] = {
 	{ ".pdf",   "zathura"},
+	{ ".c",     "nvim"},
 };
-
-
 
 static Key keys[] = {
 	{ 'j',          rel_highlight,      {.i = +1}},
@@ -38,6 +37,5 @@ static Key keys[] = {
 	{ '/',          filesearch,         {.i = +1}},
 	{ '?',          filesearch,         {.i = -1}},
 };
-
 
 #endif

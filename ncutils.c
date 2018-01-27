@@ -51,12 +51,39 @@ dialog(Dirview* win, char* msg, char* input)
 void
 init_colors(void)
 {
-	init_pair(PAIR_BLUE_DEF, COLOR_BLUE, -1);
+	init_pair(PAIR_RED_DEF, COLOR_RED, -1);
 	init_pair(PAIR_GREEN_DEF, COLOR_GREEN, -1);
-	init_pair(PAIR_WHITE_DEF, COLOR_WHITE, -1);
+	init_pair(PAIR_BLUE_DEF, COLOR_BLUE, -1);
 	init_pair(PAIR_CYAN_DEF, COLOR_CYAN, -1);
 	init_pair(PAIR_YELLOW_DEF, COLOR_YELLOW, -1);
-	init_pair(PAIR_RED_DEF, COLOR_RED, -1);
+	init_pair(PAIR_WHITE_DEF, COLOR_WHITE, -1);
+}
+
+/* Initialize the sub-windows that make up the main view */
+int
+init_windows(Dirview view[WIN_NR], int row, int col, float main_perc)
+{
+	int i, mc, sc_l, sc_r;
+
+	if(!view)
+		return -1;
+
+	/* Calculate center window and sidebars column count */
+	mc = col * main_perc;
+	sc_r = (col - mc) / 2;
+	sc_l = col - mc - sc_r;
+
+	view[TOP_WIN].win = newwin(1, col, 0, 0);
+	view[BOT_WIN].win = newwin(1, col, row - 1, 0);
+	view[LEFT_WIN].win = newwin(row - 2, sc_l - 1, 1, 0);
+	view[CENTER_WIN].win = newwin(row - 2, mc - 1, 1, sc_l);
+	view[RIGHT_WIN].win = newwin(row - 2, sc_r, 1, sc_l + mc);
+
+	/* Initialize the view offsets */
+	for(i=0; i<WIN_NR; i++)
+		view[i].offset = 0;
+
+	return 0;
 }
 
 /* Update the bottom status bar. Format: <permissions>  <uid>  <gid>  <last

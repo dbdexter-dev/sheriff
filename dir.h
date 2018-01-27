@@ -6,14 +6,18 @@
 #ifndef DIR_H
 #define DIR_H
 
+#define _GNU_SOURCE         /* This way NAME_MAX is defined */
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <time.h>
+#include <sys/types.h>
 
 
 typedef struct fileentry
 {
-	char name[NAME_MAX+1];    /* NAME_MAX defined in dirent.h */
+	char name[NAME_MAX+1];  /* NAME_MAX defined in dirent.h */
 	unsigned long size;
 	uid_t uid, gid;
 	mode_t mode;

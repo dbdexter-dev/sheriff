@@ -83,4 +83,5 @@ update_win_with_path(Dirview* win, char* parent, fileentry_t* leaf)
 		win->offset = 0;
 		free(tmp);
 	}
+	return 0;
 }

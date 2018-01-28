@@ -49,32 +49,23 @@ safealloc(size_t s)
 {
 	void* ret;
 	ret = malloc(s);
-	assert(ret);
+	if(!ret)
+		die("Malloc failed");
 	return ret;
 }
 
 /* Truncate a string to length, adding "~" to the end if needed */
 int
-strchomp(const char* src, char* dst, const int maxlen)
+strchomp(const char* src, char* dest, const int maxlen)
 {
-	int i;
 	if(!src)
-	{
-		dst[0] = 0;
 		return 1;
-	}
+	memcpy(dest, src, maxlen);
+	if(strlen(src) < maxlen)
+		return 0;
 
-	for(i=0; src[i] != '\0' && i < maxlen - 1; i++)
-		dst[i] = src[i];
-
-	if(src[i] == '\0')
-		dst[i] = '\0';     /* Apparently strncpy does not always add '\0' */
-	else
-	{
-		dst[maxlen-2] = '~';
-		dst[maxlen-1] = '\0';
-	}
-
+	dest[maxlen-2] = '~';
+	dest[maxlen-1] = '\0';
 	return 0;
 }
 
@@ -87,45 +78,17 @@ tohuman(unsigned long bytes, char* human)
 	int exp_3;
 
 	assert(human);
-
-	/* Integer divide until the last moment */
-	for(exp_3 = 0, fbytes = bytes; fbytes > 1000; fbytes /= 1000, exp_3++);
-	if(fbytes >= 100)
-		sprintf(human, "%3.f %c", fbytes, suffix[exp_3]);
-	else if(fbytes >= 10)
-		sprintf(human, "%3.1f %c", fbytes, suffix[exp_3]);
+	if(bytes < 1000)
+		sprintf(human, "%lu %c", bytes, suffix[0]);
 	else
-		sprintf(human, "%3.2f %c", fbytes, suffix[exp_3]);
-}
-
-int
-wdshorten(const char* src, char* dest, const unsigned destsize)
-{
-	assert(src);
-	assert(dest);
-
-	int count;
-	if(src == NULL || dest == NULL)
-		return -1;
-
-	for(; *src != '\0'; src++)
 	{
-		if(*src == '/')
-		{
-			if(*(src+1) == '.')
-				count = 3;
-			else
-				count = 2;
-
-			if(count > destsize)
-			{
-				*dest = '\0';
-				return 1;
-			}
-			for(; count>0; count--)
-				*dest++ = *src++;
-		}
+		/* Integer divide until the last moment */
+		for(exp_3 = 0, fbytes = bytes; fbytes > 1000; fbytes /= 1000, exp_3++);
+		if(fbytes >= 100)
+			sprintf(human, "%3.f %c", fbytes, suffix[exp_3]);
+		else if(fbytes >= 10)
+			sprintf(human, "%3.1f %c", fbytes, suffix[exp_3]);
+		else
+			sprintf(human, "%3.2f %c", fbytes, suffix[exp_3]);
 	}
-	*dest = '\0';
-	return 0;
 }

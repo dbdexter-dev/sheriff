@@ -1,3 +1,6 @@
 **/tags
 **/*.o
 sheriff
+vgcore*
+cachegrind.out*
+callgrind.out*

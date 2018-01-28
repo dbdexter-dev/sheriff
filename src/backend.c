@@ -92,6 +92,8 @@ update_win_with_path(Dirview* win, char* parent, fileentry_t* leaf)
 
 		win->offset = 0;
 	}
+	else if(!leaf && parent)
+		init_listing(&(win->dir), parent);
 	else
 		init_listing(&(win->dir), NULL);
 

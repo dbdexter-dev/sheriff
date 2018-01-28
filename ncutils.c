@@ -8,6 +8,26 @@
 #include "ncutils.h"
 #include "utils.h"
 
+/* Update window offset if needed, return 1 if we did change offset,
+ * 0 otherwise */
+int
+check_offset_changed(Dirview* win)
+{
+	int nr;
+	nr = getmaxy(win->win);
+
+	if(win->dir->sel_idx - win->offset >= nr)
+	{
+		win->offset = (win->dir->sel_idx - nr + 1);
+		return 1;
+	}
+	else if (win->dir->sel_idx - win->offset < 0)
+	{
+		win->offset = win->dir->sel_idx;
+		return 1;
+	}
+	return 0;
+}
 /* Deinitialize windows, right before exiting. This deallocates all memory
  * dedicated to fileentry_t* arrays and their paths as well */
 int
@@ -166,10 +186,8 @@ refresh_listing(Dirview* win, int show_sizes)
 	/* Allocate enough space to fit the shortened listing names */
 	tmpstring = safealloc(sizeof(*tmpstring) * (mc + 1));
 
-	if(win->dir->sel_idx - win->offset >= mr)
-		win->offset = (win->dir->sel_idx - mr + 1);
-	else if (win->dir->sel_idx - win->offset < 0)
-		win->offset = win->dir->sel_idx;
+	/* Update window offsets if necessary */
+	check_offset_changed(win);
 
 	/* Read up to $mr entries */
 	for(i = win->offset; i < win->dir->count && (i - win->offset) < mr; i++)

@@ -31,6 +31,7 @@ enum windows
 	BOT_WIN = 4
 };
 
+int  check_offset_changed(Dirview* win);
 int  deinit_windows(Dirview view[WIN_NR]);
 void dialog(Dirview* view, char* msg, char* buf);
 void init_colors();

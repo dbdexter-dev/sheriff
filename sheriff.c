@@ -138,7 +138,12 @@ rel_highlight(const Arg* arg)
 	if(cur_pos != prev_pos)
 		refresh_listing(main_view + RIGHT_WIN, 0);
 
-	refresh_listing(main_view + CENTER_WIN, 1);
+	/* If the page offset doesn't have to be changed, do a simple wrefresh;
+	 * otherwise do a full redraw */
+	if(check_offset_changed(main_view + CENTER_WIN))
+		refresh_listing(main_view + CENTER_WIN, 1);
+	else
+		wrefresh(main_view[CENTER_WIN].win);
 }
 /*}}}*/
 #include "config.h"
@@ -318,7 +323,10 @@ main(int argc, char* argv[])
 			resize_handler();
 		for(i=0; i<LENGTH(keys); i++)
 			if(ch == keys[i].key)
+			{
 				keys[i].funct(&keys[i].arg);
+				break;
+			}
 
 		/* Update the status bars every time a key is pressed */
 		print_status_top(main_view + TOP_WIN);

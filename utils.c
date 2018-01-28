@@ -49,32 +49,23 @@ safealloc(size_t s)
 {
 	void* ret;
 	ret = malloc(s);
-	assert(ret);
+	if(!ret)
+		die("Malloc failed");
 	return ret;
 }
 
 /* Truncate a string to length, adding "~" to the end if needed */
 int
-strchomp(const char* src, char* dst, const int maxlen)
+strchomp(const char* src, char* dest, const int maxlen)
 {
-	int i;
 	if(!src)
-	{
-		dst[0] = 0;
 		return 1;
-	}
+	memcpy(dest, src, maxlen);
+	if(strlen(src) < maxlen)
+		return 0;
 
-	for(i=0; src[i] != '\0' && i < maxlen - 1; i++)
-		dst[i] = src[i];
-
-	if(src[i] == '\0')
-		dst[i] = '\0';     /* Apparently strncpy does not always add '\0' */
-	else
-	{
-		dst[maxlen-2] = '~';
-		dst[maxlen-1] = '\0';
-	}
-
+	dest[maxlen-2] = '~';
+	dest[maxlen-1] = '\0';
 	return 0;
 }
 

@@ -28,21 +28,22 @@ int
 free_listing(struct direntry** direntry)
 {
 	int i;
+	const struct direntry* dir = *direntry;
 
-	if(!(*direntry))
+	if(!dir)
 		return 0;
 
-	if((*direntry)->tree)
+	if(dir->tree)
 	{
-		for(i=0; i<(*direntry)->count; i++)
-			free((*direntry)->tree[i]);
-		free((*direntry)->tree);
+		for(i=0; i<dir->count; i++)
+			free(dir->tree[i]);
+		free(dir->tree);
 		(*direntry)->tree = NULL;
 	}
 
-	if((*direntry)->path)
+	if(dir->path)
 	{
-		free((*direntry)->path);
+		free(dir->path);
 		(*direntry)->path = NULL;
 	}
 
@@ -97,19 +98,20 @@ dirlist(char* path, int* entry_nr)
 	DIR* dp;
 	struct dirent *ep;
 	struct stat st;
-	int i;
+	int i, entries;
 	char* tmp;
 	fileentry_t** tree;
 
 	assert(path);
 
 	/* Calculate how many elements we need to allocate */
-	*entry_nr = 0;
+	entries = 0;
 	if((dp = opendir(path)))
 	{
 		while((ep = readdir(dp)))
-			(*entry_nr)++;
+			entries++;
 		closedir(dp);
+		*entry_nr = entries;
 	}
 	/* Opendir failed, create a single element */
 	else
@@ -136,14 +138,14 @@ dirlist(char* path, int* entry_nr)
 	}
 
 	/* Allocate a chunk of memory to contain all the elements */
-	tree = safealloc(sizeof(*tree) * *entry_nr);
-	for(i=0; i<*entry_nr; i++)
+	tree = safealloc(sizeof(*tree) * entries);
+	for(i=0; i<entries; i++)
 		tree[i] = safealloc(sizeof(*tree[i]));
 
 	/* Populate the directory listing */
 	if((dp = opendir(path)))
 	{
-		for(i = 0; i < *entry_nr; i++)
+		for(i = 0; i < entries; i++)
 		{
 			ep = readdir(dp);
 			/* Populate the first struct fields */

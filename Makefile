@@ -1,32 +1,22 @@
-SRC=$(wildcard *.c)
-OBJ=${SRC:.c=.o}
+export CFLAGS =-pipe -Wall
+export LDFLAGS =-lncurses
 
-CFLAGS =-pipe -Wall
-LDFLAGS =-lncurses
+.PHONY: default debug release src unittests clean
 
-all: debug
+default: debug
 
-debug : CFLAGS += -g -Werror
-debug: sheriff
+debug: CFLAGS += -g -Werror
+debug: src unittests
 
-release : CFLAGS += -O2 -march=native -mtune=native
+release: CFLAGS += -O2 -march=native -mtune=native
 release: sheriff strip
 
-.PHONY: clean all debug release strip
-
-strip: sheriff
-	strip $^
-
-sheriff: ${OBJ}
-	gcc ${LDFLAGS} -o $@ $^
-
-# Custom rule for sheriff.o so that config.h is
-# taken into consideration
-sheriff.o: sheriff.c config.h
-	gcc ${CFLAGS} -c -o $@ $<
-
-%.o: %.c
-	gcc ${CFLAGS} -c -o $@ $<
+src:
+	$(MAKE) -C $@
+unittests:
+	$(MAKE) -C $@
 
 clean:
-	rm -fv ${OBJ} sheriff
+	$(MAKE) -C src clean
+	$(MAKE) -C unittests clean
+

@@ -19,13 +19,18 @@ static Assoc associations[] = {
 	{ NULL,     NULL},
 };
 
-static Key yank_keys[] = {
-	{ 'y',          yank_cur,           {.i = 1}},
+static Key c_multi[] = {
+	{ 'd',          quick_cd,           {0}},
 	{ '\0',         NULL,               {0}},
 };
 
-static Key delete_keys[] = {
+static Key d_multi[] = {
 	{ 'd',          yank_cur,           {.i = 0}},
+	{ '\0',         NULL,               {0}},
+};
+
+static Key y_multi[] = {
+	{ 'y',          yank_cur,           {.i = 1}},
 	{ '\0',         NULL,               {0}},
 };
 
@@ -40,9 +45,11 @@ static Key keys[] = {
 	{ KEY_RIGHT,    navigate,           {.i = +1}},
 	{ '/',          filesearch,         {.i = +1}},
 	{ '?',          filesearch,         {.i = -1}},
-	{ 'y',          multibind,          {.v = yank_keys}},
-	{ 'd',          multibind,          {.v = delete_keys}},
+	{ 'y',          multibind,          {.v = y_multi}},
+	{ 'd',          multibind,          {.v = d_multi}},
+	{ 'c',          multibind,          {.v = c_multi}},
 	{ 'p',          paste_cur,          {0}},
+/*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };
 

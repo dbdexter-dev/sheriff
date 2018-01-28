@@ -1,6 +1,8 @@
 SRC=$(wildcard *.c)
 OBJ=${SRC:.c=.o}
 
+LDFLAGS += -lncurses
+
 .PHONY: default clean strip
 
 default: sheriff

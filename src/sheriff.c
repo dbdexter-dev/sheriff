@@ -15,7 +15,6 @@
 #include <time.h>
 #include <unistd.h>
 #include "backend.h"
-#include "dir.h"
 #include "fileops.h"
 #include "ncutils.h"
 #include "utils.h"
@@ -37,8 +36,9 @@ typedef struct
 } Key;
 
 
-static void  enter_directory();
-static void  exit_directory();
+static int   direct_cd(char* center_path);
+static int   enter_directory();
+static int   exit_directory();
 static void  resize_handler();
 static void  xdg_open(struct direntry* file);
 
@@ -46,6 +46,7 @@ static void  filesearch(const Arg* arg);
 static void  multibind(const Arg* arg);
 static void  navigate(const Arg* arg);
 static void  paste_cur(const Arg* arg);
+static void  quick_cd(const Arg* arg);
 static void  rel_highlight(const Arg* arg);
 static void  yank_cur(const Arg* arg);
 
@@ -67,6 +68,8 @@ filesearch(const Arg* arg)
 	const struct direntry* dir = main_view[CENTER_WIN].dir;
 
 	dialog(main_view + BOT_WIN, arg->i > 0 ? "/" : "?", fname);
+	if(*fname == '\0')
+		return;
 
 	/* Basically, go through all the elements from the currently selected one to
 	 * the very [beginning | end], exiting once a match is found. TODO: add the
@@ -179,6 +182,19 @@ paste_cur(const Arg* arg)
 	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
 	refresh_listing(main_view + CENTER_WIN, 1);
 }
+
+/* Cd into a specific directory directly */
+void
+quick_cd(const Arg* arg)
+{
+	char path[256];
+
+	dialog(main_view + BOT_WIN, "cd: ", path);
+	if(*path == '\0')
+		return;
+	if(direct_cd(path))
+		dialog(main_view + BOT_WIN, "Error: destination is not a valid directory", NULL);
+}
 /* Highlight a file in the center window given an offset from the currently
  * highlighted index (offset in arg->i)*/
 void
@@ -234,46 +250,84 @@ yank_cur(const Arg* arg)
 /*}}}*/
 #include "config.h"
 
+/* Given a path, check whether it's a directory. If it is, cd into it and
+ * refresh all the views */
+int
+direct_cd(char* path)
+{
+	char* pathplus;
+	int status = 0;
+	struct stat st;
+
+	if(stat(path, &st) || !S_ISDIR(st.st_mode))
+		return 1;
+
+	pathplus = safealloc(sizeof(*pathplus) * (strlen(path) + 3 + 1));
+	sprintf(pathplus, "%s/..", path);
+	status |= update_win_with_path(main_view + LEFT_WIN, pathplus, NULL);
+	free(pathplus);
+	status |= update_win_with_path(main_view + CENTER_WIN, path, NULL);
+	status |= update_win_with_path(main_view + RIGHT_WIN, path,
+	                               main_view[CENTER_WIN].dir->tree[main_view[CENTER_WIN].dir->sel_idx]);
+	status |= associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
+	status |= associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
+	status |= refresh_listing(main_view + LEFT_WIN, 0);
+	status |= refresh_listing(main_view + CENTER_WIN, 1);
+	status |= refresh_listing(main_view + RIGHT_WIN, 0);
+
+	print_status_top(main_view + TOP_WIN);
+	print_status_bottom(main_view + BOT_WIN);
+
+	return status;
+}
+
 /* Navigate to the directory selected in the center window */
-void
+int
 enter_directory()
 {
+	int status = 0;
 	/* If type < 0, it's not even a file, but a message (e.g. "inaccessible"):
 	 * don't attempt a cd, just exit */
 	if(main_view[CENTER_WIN].dir->tree[main_view[CENTER_WIN].dir->sel_idx]->mode == 0)
-		return;
+		return 1;
 
 	if(navigate_fwd(main_view + LEFT_WIN, main_view + CENTER_WIN, main_view + RIGHT_WIN))
 		die("Couldn't navigate_fwd");
 	/* Update the top and bottom bars to reflect the change in the center
 	 * window, then refresh the main views. The two bar-windows are updated
 	 * every time something happens anyway in the main control loop */
-	associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
-	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
-	refresh_listing(main_view + LEFT_WIN, 0);
-	refresh_listing(main_view + CENTER_WIN, 1);
-	refresh_listing(main_view + RIGHT_WIN, 0);
+	status |= associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
+	status |= associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
+	status |= refresh_listing(main_view + LEFT_WIN, 0);
+	status |= refresh_listing(main_view + CENTER_WIN, 1);
+	status |= refresh_listing(main_view + RIGHT_WIN, 0);
+
 	print_status_top(main_view + TOP_WIN);
 	print_status_bottom(main_view + BOT_WIN);
+	return status;
 }
 
 /* Navigate backwards in the directory tree, into the parent of the center
  * window */
-void
+int
 exit_directory()
 {
+	int status = 0;
 	if(navigate_back(main_view + LEFT_WIN, main_view + CENTER_WIN, main_view + RIGHT_WIN))
 		die("Couldn't navigate_back");
 	/* As in enter_directory, update the directories associated to the top and
 	 * bottom bars, and update the views since we've changed their underlying
 	 * associations */
-	associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
-	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
-	refresh_listing(main_view + LEFT_WIN, 0);
-	refresh_listing(main_view + CENTER_WIN, 1);
-	refresh_listing(main_view + RIGHT_WIN, 0);
+	status |= associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
+	status |= associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
+	status |= refresh_listing(main_view + LEFT_WIN, 0);
+	status |= refresh_listing(main_view + CENTER_WIN, 1);
+	status |= refresh_listing(main_view + RIGHT_WIN, 0);
+
 	print_status_top(main_view + TOP_WIN);
 	print_status_bottom(main_view + BOT_WIN);
+
+	return status;
 }
 
 /* Handler that takes care of resizing the subviews when a SIGWINCH is received.
@@ -373,6 +427,7 @@ int
 main(int argc, char* argv[])
 {
 	int i, max_row, max_col;
+	char* path;
 	wchar_t ch;
 
 	/* Initialize the yank buffer */
@@ -385,28 +440,16 @@ main(int argc, char* argv[])
 	curs_set(0);                          /* Hide cursor */
 	use_default_colors();                 /* Enable default 16 colors */
 	start_color();
+	init_colors();
 
 	getmaxyx(stdscr, max_row, max_col);
 
-	/* Initialize the two main directory listings */
-	init_listing(&(main_view[LEFT_WIN].dir), "../");
-	init_listing(&(main_view[CENTER_WIN].dir), "./");
-	init_listing(&(main_view[RIGHT_WIN].dir), "./");
-
-	/* Associate status bars with the main direntry */
-	associate_dir(main_view + TOP_WIN, main_view[CENTER_WIN].dir);
-	associate_dir(main_view + BOT_WIN, main_view[CENTER_WIN].dir);
-
-	init_colors();
 	init_windows(main_view, max_row, max_col, MAIN_PERC);
 	keypad(main_view[BOT_WIN].win, TRUE);
 
-	/* Initial screen update */
-	refresh_listing(main_view + LEFT_WIN, 0);
-	refresh_listing(main_view + CENTER_WIN, 1);
-	refresh_listing(main_view + RIGHT_WIN, 0);
-	print_status_top(main_view + TOP_WIN);
-	print_status_bottom(main_view + BOT_WIN);
+	path = realpath(".", NULL);
+	assert(!direct_cd(path));
+	free(path);
 
 	/* Main control loop */
 	while((ch = wgetch(main_view[BOT_WIN].win)) != 'q')

@@ -23,15 +23,17 @@ int
 navigate_back(Dirview* left, Dirview* center, Dirview* right)
 {
 	fileentry_t tmp = {.name = "../", .mode = S_IFDIR};
+	struct direntry* tmpdir;
 
-	if(free_listing(&(right->dir)))
-		return 1;
-
+	/* Rotate right by one the allocated directories */
+	tmpdir = right->dir;
 	right->dir = center->dir;
-	right->offset = center->offset;
 	center->dir = left->dir;
+	left->dir = tmpdir;
+
+	right->offset = center->offset;
 	center->offset = left->offset;
-	left->dir = NULL;
+	left->offset = 0;
 
 	assert(center->dir->path);
 
@@ -46,17 +48,21 @@ int
 navigate_fwd(Dirview* left, Dirview* center, Dirview* right)
 {
 	fileentry_t* centersel;
+	struct direntry* tmpdir;
 
 	centersel = center->dir->tree[center->dir->sel_idx];
 	if(!S_ISDIR(centersel->mode))
 		return 1;
 
-	assert(!free_listing(&left->dir));
+	/* Rotate left by one the allocated directories */
+	tmpdir = left->dir;
 	left->dir = center->dir;
-	left->offset = center->offset;
 	center->dir = right->dir;
+	right->dir = tmpdir;
+
+	left->offset = center->offset;
 	center->offset = right->offset;
-	right->dir = NULL;
+	right->offset = 0;
 
 	assert(center->dir->path);
 	centersel = center->dir->tree[center->dir->sel_idx];
@@ -71,17 +77,21 @@ int
 update_win_with_path(Dirview* win, char* parent, fileentry_t* leaf)
 {
 	char* tmp;
-
-	if(free_listing(&win->dir))
-		return 1;
-
-	if(S_ISDIR(leaf->mode))
+	/* If leaf is a directory, populate with the contents of said directory;
+	 * otherwise, just put up a blank view. Also has the nice side effect that
+	 * you can initialize a window to blank by passing NULL to either parent or
+	 * leaf */
+	if(leaf && S_ISDIR(leaf->mode) && parent)
 	{
 		tmp = safealloc(sizeof(*tmp) * (strlen(parent) + strlen(leaf->name) + 1 + 1));
 		sprintf(tmp, "%s/%s", parent, leaf->name);
 		init_listing(&(win->dir), tmp);
-		win->offset = 0;
 		free(tmp);
+
+		win->offset = 0;
 	}
+	else
+		init_listing(&(win->dir), NULL);
+
 	return 0;
 }

@@ -30,6 +30,7 @@ struct direntry
 	fileentry_t** tree;     /* Array of file metadata */
 	int count;              /* Number of entries in the list */
 	int sel_idx;            /* Selected entry index */
+	int max_nodes;          /* Number of nodes allocated in fileentry_t** */
 };
 
 int init_listing(struct direntry** direntry, char* path);

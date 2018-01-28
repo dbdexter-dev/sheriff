@@ -170,12 +170,13 @@ refresh_listing(Dirview* win, int show_sizes)
 
 	assert(win->win);
 
-	if(!win->dir || !win->dir->tree)
+	if(!win->dir || !win->dir->path)
 	{
 		werase(win->win);
 		wrefresh(win->win);
 		return 1;
 	}
+	assert(win->dir->tree);
 
 	getmaxyx(win->win, mr, mc);
 

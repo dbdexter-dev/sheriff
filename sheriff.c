@@ -103,7 +103,7 @@ navigate(const Arg* arg)
 	{
 		if(S_ISDIR(dir->tree[dir->sel_idx]->mode))
 			enter_directory();
-		else
+		else if(dir->tree[dir->sel_idx]->mode != 0)
 			xdg_open(dir);
 	}
 	/* Backward navigation */
@@ -131,8 +131,7 @@ rel_highlight(const Arg* arg)
 	if(S_ISDIR(dir->tree[dir->sel_idx]->mode))
 		update_win_with_path(main_view + RIGHT_WIN, dir->path, dir->tree[dir->sel_idx]);
 	else
-		if(free_listing(&main_view[RIGHT_WIN].dir))
-			die("free_listing failed");
+		update_win_with_path(main_view + RIGHT_WIN, NULL, NULL);
 
 	/* Update only if we actually moved inside the window */
 	if(cur_pos != prev_pos)

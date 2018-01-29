@@ -12,6 +12,17 @@ die(char *msg)
 	exit(1);
 }
 
+/* Given a parent directory and a file in it, concatenate them to create a full
+ * path. XXX: remember to free the returned pointer in the callee */
+char*
+join_path(char *parent, char *child)
+{
+	char *ret;
+	ret = safealloc(sizeof(*ret) * (strlen(parent) + strlen(child) + 1 + 1));
+	sprintf(ret, "%s/%s", parent, child);
+	return ret;
+}
+
 void
 octal_to_str(int mode, char str[])
 {

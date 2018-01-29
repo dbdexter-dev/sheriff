@@ -14,7 +14,7 @@ release: src strip
 
 src:
 	$(MAKE) -C $@
-unittests:
+tests:
 	$(MAKE) -C $@
 strip:
 	strip src/sheriff

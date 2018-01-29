@@ -19,6 +19,6 @@ typedef struct {
 int navigate_fwd(Dirview *left, Dirview *center, Dirview *right);
 int navigate_back(Dirview *left, Dirview *center, Dirview *right);
 int associate_dir(Dirview *view, Direntry *direntry);
-int update_win_with_path(Dirview *win, char *parent, const Fileentry *leaf);
+int update_win_with_path(Dirview *win, const char *path);
 
 #endif

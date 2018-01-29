@@ -61,6 +61,7 @@ filesearch(const Arg *arg)
 {
 	int i, found;
 	char fname[MAXSEARCHLEN+1];
+	char *fullpath;
 	const Direntry *dir = mainview[CENTER].dir;
 
 	dialog(mainview + BOT, arg->i > 0 ? "/" : "?", fname);
@@ -92,9 +93,9 @@ filesearch(const Arg *arg)
 
 	/* If a match has been found, update the right pane and repaint it */
 	if (found) {
-		update_win_with_path(mainview + RIGHT,
-		                     dir->path,
-		                     dir->tree[dir->sel_idx]);
+		fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
+		update_win_with_path(mainview + RIGHT, fullpath);
+		free(fullpath);
 		refresh_listing(mainview + RIGHT, 0);
 		refresh_listing(mainview + CENTER, 1);
 	}
@@ -176,7 +177,7 @@ paste_cur(const Arg *arg)
 	 * window to be initialized with it */
 	tmp = safealloc(sizeof(*tmp) * (strlen(dir->path) + 1));
 	strcpy(tmp, dir->path);
-	update_win_with_path(mainview + CENTER, tmp, NULL);
+	update_win_with_path(mainview + CENTER, tmp);
 	free(tmp);
 
 	associate_dir(mainview + TOP, mainview[CENTER].dir);
@@ -205,6 +206,7 @@ void
 rel_highlight(const Arg *arg)
 {
 	const Direntry *dir = mainview[CENTER].dir;
+	char *fullpath;
 	int cur_pos, prev_pos;
 
 	if (arg->i == 0) {
@@ -218,11 +220,11 @@ rel_highlight(const Arg *arg)
 	/* If the selected element is a directory, update the right pane
 	 * Otherwise, free it so that refresh_listing will show a blank pane */
 	if (S_ISDIR(dir->tree[dir->sel_idx]->mode)) {
-		update_win_with_path(mainview + RIGHT,
-		                     dir->path,
-		                     dir->tree[dir->sel_idx]);
+		fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
+		update_win_with_path(mainview + RIGHT, fullpath);
+		free(fullpath);
 	} else {
-		update_win_with_path(mainview + RIGHT, NULL, NULL);
+		update_win_with_path(mainview + RIGHT, NULL);
 	}
 
 	/* Update only if we actually moved inside the window */
@@ -257,6 +259,11 @@ yank_cur(const Arg *arg)
 		free(yankbuf.file);
 	}
 
+	if(!dir->tree[dir->sel_idx]->mode) {
+		/* This is not a file, bail out */
+		return;
+	}
+
 	yankbuf.file = safealloc(sizeof(*yankbuf.file) * (strlen(cw_wd) +
 	                                                  strlen(cw_selname) +
 	                                                  1 + 1));
@@ -273,21 +280,18 @@ yank_cur(const Arg *arg)
 int
 direct_cd(char *path)
 {
-	char*pathplus;
+	char *fullpath;
 	int status;
 	struct stat st;
 
 	status = 0;
 
 	if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
-		pathplus = safealloc(sizeof(*pathplus) * (strlen(path) + 3 + 1));
-		sprintf(pathplus, "%s/..", path);
-		status |= update_win_with_path(mainview + LEFT, pathplus, NULL);
-		free(pathplus);
-		status |= update_win_with_path(mainview + CENTER, path, NULL);
-		status |= update_win_with_path(mainview + RIGHT,
-		                               path,
-		                               mainview[CENTER].dir->tree[mainview[CENTER].dir->sel_idx]);
+		fullpath = join_path(path, "../");
+		status |= update_win_with_path(mainview + LEFT, fullpath);
+		status |= update_win_with_path(mainview + CENTER, fullpath);
+		status |= update_win_with_path(mainview + RIGHT, fullpath);
+		free(fullpath);
 		status |= associate_dir(mainview + BOT, mainview[CENTER].dir);
 		status |= associate_dir(mainview + TOP, mainview[CENTER].dir);
 		status |= refresh_listing(mainview + LEFT, 0);

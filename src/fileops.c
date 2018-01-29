@@ -31,16 +31,17 @@ int
 move_file(char *src, char *dest, int preserve_src)
 {
 	pid_t pid;
-	char *cmd;
 
 	if (!src || !dest) {
 		return -1;
 	}
 
-	cmd = (preserve_src == 0) ? "/bin/mv" : "/bin/cp";
-
 	if (!(pid = fork())) {
-		execlp(cmd, cmd, "-rn",  src, dest, NULL);
+		if(preserve_src) {
+			execlp("/bin/cp", "/bin/cp", "-rn",  src, dest, NULL);
+		} else {
+			execlp("/bin/mv", "/bin/mv", "-n",  src, dest, NULL);
+		}
 		exit(0);
 	} else if (pid < 0) {
 		return -1;

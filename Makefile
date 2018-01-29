@@ -1,4 +1,4 @@
-export CFLAGS =-pipe -Wall
+export CFLAGS =-pipe -Wall -std=c99 -pedantic -D _GNU_SOURCE
 export LDFLAGS =-lncurses
 PREFIX = /usr
 

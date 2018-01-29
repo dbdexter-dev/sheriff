@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <assert.h>
 #include <dirent.h>
 #include <stdlib.h>
@@ -10,7 +8,7 @@
 #include "utils.h"
 
 int
-associate_dir(Dirview* view, struct direntry* direntry)
+associate_dir(Dirview *view, Direntry *direntry)
 {
 	assert(view);
 	assert(direntry);
@@ -20,10 +18,10 @@ associate_dir(Dirview* view, struct direntry* direntry)
 }
 
 int
-navigate_back(Dirview* left, Dirview* center, Dirview* right)
+navigate_back(Dirview *left, Dirview *center, Dirview *right)
 {
-	fileentry_t tmp = {.name = "../", .mode = S_IFDIR};
-	struct direntry* tmpdir;
+	const Fileentry tmp = {.name = "../", .mode = S_IFDIR};
+	Direntry *tmpdir;
 
 	/* Rotate right by one the allocated directories */
 	tmpdir = right->dir;
@@ -45,14 +43,15 @@ navigate_back(Dirview* left, Dirview* center, Dirview* right)
 
 /* Navigate forward in the directory listing */
 int
-navigate_fwd(Dirview* left, Dirview* center, Dirview* right)
+navigate_fwd(Dirview *left, Dirview *center, Dirview *right)
 {
-	fileentry_t* centersel;
-	struct direntry* tmpdir;
+	Fileentry* centersel;
+	Direntry *tmpdir;
 
 	centersel = center->dir->tree[center->dir->sel_idx];
-	if(!S_ISDIR(centersel->mode))
-		return 1;
+	if (!S_ISDIR(centersel->mode)) {
+		return -1;
+	}
 
 	/* Rotate left by one the allocated directories */
 	tmpdir = left->dir;
@@ -76,26 +75,27 @@ navigate_fwd(Dirview* left, Dirview* center, Dirview* right)
 /* Update a window with a given path, leaf can be NULL, in that case the window
  * in question is initialized using *parent as the path */
 int
-update_win_with_path(Dirview* win, char* parent, fileentry_t* leaf)
+update_win_with_path(Dirview *win, char *parent, const Fileentry* leaf)
 {
-	char* tmp;
+	char *tmp;
 	/* If leaf is a directory, populate with the contents of said directory;
 	 * otherwise, just put up a blank view. Also has the nice side effect that
 	 * you can initialize a window to blank by passing NULL to either parent or
 	 * leaf */
-	if(leaf && S_ISDIR(leaf->mode) && parent)
-	{
-		tmp = safealloc(sizeof(*tmp) * (strlen(parent) + strlen(leaf->name) + 1 + 1));
+	if (leaf && S_ISDIR(leaf->mode) && parent) {
+		tmp = safealloc(sizeof(*tmp) * (strlen(parent) +
+		                                strlen(leaf->name)
+		                                + 1 + 1));
 		sprintf(tmp, "%s/%s", parent, leaf->name);
 		init_listing(&(win->dir), tmp);
 		free(tmp);
 
 		win->offset = 0;
-	}
-	else if(!leaf && parent)
+	} else if (!leaf && parent) {
 		init_listing(&(win->dir), parent);
-	else
+	} else {
 		init_listing(&(win->dir), NULL);
+	}
 
 	return 0;
 }

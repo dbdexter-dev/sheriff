@@ -1,21 +1,20 @@
 /**
- * User configuration file. Contains the various keybindings (and possibily
- * other options in the future)
+ * User configuration file. Contains the various keybindings and file
+ * associations (and possibily other options in the future)
  */
-#ifndef CONFIG_H
-#define CONFIG_H
-
 #include <ncurses.h>
 
-typedef struct
-{
-	char* ext;
-	char* cmd;
+typedef struct {
+	char *ext;
+	char *cmd;
 } Assoc;
 
 static Assoc associations[] = {
 	{ ".pdf",   "zathura"},
 	{ ".c",     "nvim"},
+	{ ".mkv",   "mpv"},
+	{ ".mp3",   "mpv"},
+	{ ".flac",  "mpv"},
 	{ NULL,     NULL},
 };
 
@@ -52,5 +51,3 @@ static Key keys[] = {
 /*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };
-
-#endif

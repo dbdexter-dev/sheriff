@@ -17,3 +17,6 @@
 Also:
 * The UI shits itself when unicode is involved
 * Kill the zombies ffs, and refresh after waitpid()
+* Something's wrong with the search: highlight a directory, then search for a
+  file. Third pane shits itself.
+* Changing focus causes extraneous input when a file is opened with vim

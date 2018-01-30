@@ -12,7 +12,7 @@
 
 typedef struct {
 	WINDOW *win;            /* Ncurses window being managed */
-	Direntry *dir;   /* Directory associated with the view */
+	Direntry *dir;          /* Directory associated with the view */
 	int offset;	            /* Offset from the beginning of the screen */
 } Dirview;
 

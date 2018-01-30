@@ -21,7 +21,7 @@ strip:
 
 clean:
 	$(MAKE) -C src clean
-	$(MAKE) -C unittests clean
+	$(MAKE) -C tests clean
 
 install: src
 	@echo installing executable file to ${PREFIX}/bin

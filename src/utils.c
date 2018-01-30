@@ -27,7 +27,6 @@ void
 octal_to_str(int mode, char str[])
 {
 	int i;
-	str[10]='\0';
 	/* Cycle through the three rwx fields */
 	for (i=0; i < 9; i++) {
 		if (mode & (1 << i)) {
@@ -59,7 +58,7 @@ octal_to_str(int mode, char str[])
 	} else {
 		str[0] = '-';
 	}
-
+	str[10]='\0';
 	return;
 }
 

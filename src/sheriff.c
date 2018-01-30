@@ -289,8 +289,8 @@ direct_cd(char *path)
 	if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
 		fullpath = join_path(path, "../");
 		status |= update_win_with_path(mainview + LEFT, fullpath);
-		status |= update_win_with_path(mainview + CENTER, fullpath);
-		status |= update_win_with_path(mainview + RIGHT, fullpath);
+		status |= update_win_with_path(mainview + CENTER, path);
+		status |= update_win_with_path(mainview + RIGHT, path);
 		free(fullpath);
 		status |= associate_dir(mainview + BOT, mainview[CENTER].dir);
 		status |= associate_dir(mainview + TOP, mainview[CENTER].dir);
@@ -423,8 +423,10 @@ xdg_open(Direntry *dir)
 
 	associated = 0;
 
-	/* Extract the file extension, if one exists */
-	for (ext = fname; *ext != '.' && *ext != '\0'; ext++)
+	/* Extract the file extension, if one exists. Has to work from the end of
+	 * the string backwards so that the very last '.' is considered the
+	 * extension delimiter */
+	for (ext = fname + strlen(fname); *ext != '.' && ext != fname; ext--)
 		;
 
 	/* If the file has an extension, check if it's already associated to a

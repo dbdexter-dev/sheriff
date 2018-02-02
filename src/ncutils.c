@@ -196,27 +196,32 @@ refresh_listing(Dirview *win, int show_sizes)
 	/* Read up to $mr entries */
 	for (i = win->offset; i < win->dir->count && (i - win->offset) < mr; i++) {
 		tmpfile = win->dir->tree[i];
-		/* Change color based on the entry type */
-		switch (tmpfile->mode & S_IFMT) {
-		case 0:
-			wattrset(win->win, COLOR_PAIR(PAIR_RED_DEF));
-			break;
-		case S_IFLNK:
-			wattrset(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
-			break;
-		case S_IFDIR:
-			wattrset(win->win, A_BOLD | COLOR_PAIR(PAIR_GREEN_DEF));
-			break;
-		case S_IFBLK:
-		case S_IFIFO:
-		case S_IFSOCK:
-		case S_IFCHR:
-			wattrset(win->win, COLOR_PAIR(PAIR_YELLOW_DEF));
-			break;
-		case S_IFREG:
-		default:
-			wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
-			break;
+
+		if (tmpfile->selected) {
+			wattrset(win->win, COLOR_PAIR(PAIR_YELLOW_DEF) | A_BOLD);
+		} else {
+			/* Change color based on the entry type */
+			switch (tmpfile->mode & S_IFMT) {
+			case 0:
+				wattrset(win->win, COLOR_PAIR(PAIR_RED_DEF));
+				break;
+			case S_IFLNK:
+				wattrset(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
+				break;
+			case S_IFDIR:
+				wattrset(win->win, A_BOLD | COLOR_PAIR(PAIR_GREEN_DEF));
+				break;
+			case S_IFBLK:
+			case S_IFIFO:
+			case S_IFSOCK:
+			case S_IFCHR:
+				wattrset(win->win, COLOR_PAIR(PAIR_YELLOW_DEF));
+				break;
+			case S_IFREG:
+			default:
+				wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
+				break;
+			}
 		}
 		/* Chomp string so that it fits in the window */
 		if (!show_sizes || tmpfile->size < 0) {
@@ -236,7 +241,6 @@ refresh_listing(Dirview *win, int show_sizes)
 		if (i == win->dir->sel_idx) {
 			try_highlight(win, i - win->offset);
 		}
-
 	}
 
 	free(tmpstring);
@@ -245,7 +249,7 @@ refresh_listing(Dirview *win, int show_sizes)
 }
 
 /* Try to highlight the idxth line, deselecting the previous one. Returns the
- * number number of the line that was actually selected */
+ * number of the line that was actually selected */
 int
 try_highlight(Dirview *win, int idx)
 {
@@ -263,7 +267,7 @@ try_highlight(Dirview *win, int idx)
 	attr = mvwinch(win->win, row_nr, 0) & (A_COLOR | A_ATTRIBUTES) & ~A_REVERSE;
 	wchgat(win->win, -1, attr, PAIR_NUMBER(attr), NULL);
 
-	idx = try_select(win->dir, idx + win->offset) - win->offset;
+	idx = try_select(win->dir, idx + win->offset, win->visual) - win->offset;
 
 	/* Turn on highlighting for this line */
 	attr = (mvwinch(win->win, idx, 0) & (A_COLOR | A_ATTRIBUTES)) | A_REVERSE;

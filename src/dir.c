@@ -21,6 +21,18 @@ static void quicksort(Fileentry* *dir, int istart, int iend);
 static void tree_xchg(Fileentry* *tree, int a, int b);
 static int  sort_tree(Direntry *dir);
 
+int
+clear_dir_selection(Direntry *direntry)
+{
+	int i;
+
+	for (i=0; i<direntry->count; i++) {
+		direntry->tree[i]->selected = 0;
+	}
+
+	return 0;
+}
+
 /* Free memory associated with a tree */
 int
 free_listing(Direntry **direntry)
@@ -82,19 +94,83 @@ init_listing(Direntry **direntry, const char *path)
 	}
 
 	(*direntry)->sel_idx = 0;
+	clear_dir_selection(*direntry);
+
+	return 0;
+}
+
+/* Clone all the elements that have been selected in a tree */
+int
+snapshot_tree_selected(Direntry **dest, Direntry *src)
+{
+	int i, j, select_count;
+	Direntry *d;
+
+	assert(src);
+	assert(dest);
+
+	if (!src->tree) {
+		return -1;
+	}
+
+	src->tree[src->sel_idx]->selected = 1;
+
+	select_count = 0;
+	for (i=0; i<src->count; i++) {
+		if (src->tree[i]->selected) {
+			select_count++;
+		}
+	}
+
+	*dest = safealloc(sizeof(**dest));
+	d = *dest;
+
+	if (src->tree || !select_count) {
+		d->count = select_count;
+		d->sel_idx = 0;
+		d->max_nodes = select_count;
+
+		d->path = safealloc(sizeof(*(d->path)) * (strlen(src->path) + 1));
+		strcpy(d->path, src->path);
+
+		d->tree = safealloc(sizeof(*(d->tree)) * select_count);
+		for (i=0, j=0; i<src->count; i++) {
+			if (src->tree[i]->selected) {
+				d->tree[j] = safealloc(sizeof(*(d->tree[0])));
+				memcpy(d->tree[j], src->tree[i], sizeof(*(src->tree[0])));
+				j++;
+			}
+		}
+	}
 
 	return 0;
 }
 
 /* Try to select the idxth element in the list */
 int
-try_select(Direntry *direntry, int idx)
+try_select(Direntry *direntry, int idx, int mark)
 {
+	int i;
+
 	if (idx >= direntry->count) {
 		idx = direntry->count - 1;
 	} else if (idx < 0) {
 		idx = 0;
 	}
+
+	if (mark) {
+		/* Mark the files from the previous position to the current one as selected */
+		if (idx > direntry->sel_idx) {
+			for (i=direntry->sel_idx+1; i<=idx; i++) {
+				direntry->tree[i]->selected ^= 1;
+			}
+		} else if (idx < direntry->sel_idx) {
+			for (i=idx; i<direntry->sel_idx; i++) {
+				direntry->tree[i]->selected ^= 1;
+			}
+		}
+	}
+
 
 	/* Update the sel pointer to the currently selected entry */
 	direntry->sel_idx = idx;

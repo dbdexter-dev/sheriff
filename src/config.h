@@ -48,6 +48,7 @@ static Key keys[] = {
 	{ 'd',          multibind,          {.v = d_multi}},
 	{ 'c',          multibind,          {.v = c_multi}},
 	{ 'p',          paste_cur,          {0}},
+	{ 'v',          visualmode_toggle,  {0}},
 /*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };

@@ -19,18 +19,21 @@ typedef struct {
 	uid_t uid, gid;
 	mode_t mode;
 	time_t lastchange;
+	int selected;
 } Fileentry;
 
 typedef struct {
 	char *path;             /* Path this struct represents */
-	Fileentry **tree;     /* Array of file metadata */
+	Fileentry **tree;       /* Array of file metadata */
 	int count;              /* Number of entries in the list */
 	int sel_idx;            /* Selected entry index */
 	int max_nodes;          /* Number of nodes allocated in Fileentry** */
 } Direntry;
 
+int clear_dir_selection(Direntry *direntry);
 int init_listing(Direntry **direntry, const char *path);
 int free_listing(Direntry **direntry);
-int try_select(Direntry *direntry, int idx);
+int snapshot_tree_selected(Direntry **dest, Direntry *src);
+int try_select(Direntry *direntry, int idx, int mark);
 
 #endif

@@ -44,14 +44,15 @@ static void  navigate(const Arg *arg);
 static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
 static void  rel_highlight(const Arg *arg);
+static void  visualmode_toggle(const Arg *arg);
 static void  yank_cur(const Arg *arg);
 
 /* This is the only variable I can't make non-global
  * since it is needed by the SIGWINCH handler and the various
  * keybind handlers
  */
-static Dirview mainview[WIN_NR];
-static Filebuffer yankbuf;
+static Dirview m_view[WIN_NR];
+static Clipboard m_clip;
 
 /* Keybind handlers {{{*/
 
@@ -62,9 +63,9 @@ filesearch(const Arg *arg)
 	int i, found;
 	char fname[MAXSEARCHLEN+1];
 	char *fullpath;
-	const Direntry *dir = mainview[CENTER].dir;
+	const Direntry *dir = m_view[CENTER].dir;
 
-	dialog(mainview + BOT, arg->i > 0 ? "/" : "?", fname);
+	dialog(m_view + BOT, arg->i > 0 ? "/" : "?", fname);
 	if (*fname == '\0') {
 		return;
 	}
@@ -74,17 +75,17 @@ filesearch(const Arg *arg)
 	 * ability to quickly redo the search */
 	found = 0;
 	if (arg->i > 0) {
-		for (i=mainview[CENTER].dir->sel_idx+1; i<dir->count; i++) {
+		for (i=m_view[CENTER].dir->sel_idx+1; i<dir->count; i++) {
 			if (strcasestr(dir->tree[i]->name, fname)) {
-				mainview[CENTER].dir->sel_idx = i;
+				m_view[CENTER].dir->sel_idx = i;
 				found = 1;
 				break;
 			}
 		}
 	} else {
-		for (i=mainview[CENTER].dir->sel_idx-1; i>=0; i--) {
+		for (i=m_view[CENTER].dir->sel_idx-1; i>=0; i--) {
 			if (strcasestr(dir->tree[i]->name, fname)) {
-				mainview[CENTER].dir->sel_idx = i;
+				m_view[CENTER].dir->sel_idx = i;
 				found = 1;
 				break;
 			}
@@ -94,10 +95,10 @@ filesearch(const Arg *arg)
 	/* If a match has been found, update the right pane and repaint it */
 	if (found) {
 		fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
-		update_win_with_path(mainview + RIGHT, fullpath);
+		update_win_with_path(m_view + RIGHT, fullpath);
 		free(fullpath);
-		refresh_listing(mainview + RIGHT, 0);
-		refresh_listing(mainview + CENTER, 1);
+		refresh_listing(m_view + RIGHT, 0);
+		refresh_listing(m_view + CENTER, 1);
 	}
 }
 
@@ -113,7 +114,7 @@ multibind(const Arg *arg)
 
 	do {
 		/* Handle resize events while waiting for input */
-		ch = wgetch(mainview[BOT].win);
+		ch = wgetch(m_view[BOT].win);
 		if (ch == KEY_RESIZE) {
 			resize_handler();
 		} else if (ch != KEY_EXIT) {
@@ -132,7 +133,7 @@ multibind(const Arg *arg)
 void
 navigate(const Arg *arg)
 {
-	Direntry *dir = mainview[CENTER].dir;
+	Direntry *dir = m_view[CENTER].dir;
 	if (arg->i == 0) {
 		return;
 	}
@@ -155,34 +156,25 @@ void
 paste_cur(const Arg *arg)
 {
 	char *tmp;
-	Direntry *dir = mainview[CENTER].dir;
+	Direntry *dir = m_view[CENTER].dir;
 
-	if (!yankbuf.file) {
-		/* No file selected, exit */
-		return;
-	}
+	clip_exec(&m_clip, dir->path);
+	clip_clear(&m_clip);
+	visualmode_toggle(NULL);
 
-	if (move_file(yankbuf.file, dir->path, yankbuf.preserve_src)) {
-		die("Paste failed!");
-	}
-
-	/* Clear yank buffer */
-	free(yankbuf.file);
-	yankbuf.file = NULL;
-
-	dialog(mainview + BOT, "Selection pasted", NULL);
+	dialog(m_view + BOT, "Selection pasted", NULL);
 
 	/* Temporarily save the path we're in since we'll be freed during the
 	 * update_win_with_path, but we want dir->path to exist long enough for the
 	 * window to be initialized with it */
 	tmp = safealloc(sizeof(*tmp) * (strlen(dir->path) + 1));
 	strcpy(tmp, dir->path);
-	update_win_with_path(mainview + CENTER, tmp);
+	update_win_with_path(m_view + CENTER, tmp);
 	free(tmp);
 
-	associate_dir(mainview + TOP, mainview[CENTER].dir);
-	associate_dir(mainview + BOT, mainview[CENTER].dir);
-	refresh_listing(mainview + CENTER, 1);
+	associate_dir(m_view + TOP, m_view[CENTER].dir);
+	associate_dir(m_view + BOT, m_view[CENTER].dir);
+	refresh_listing(m_view + CENTER, 1);
 }
 
 /* Cd into a specific directory directly */
@@ -191,21 +183,22 @@ quick_cd(const Arg *arg)
 {
 	char path[256];
 
-	dialog(mainview + BOT, "cd: ", path);
+	dialog(m_view + BOT, "cd: ", path);
 	if (*path == '\0') {
 		return;
 	} if (direct_cd(path)) {
-		dialog(mainview + BOT,
+		dialog(m_view + BOT,
 		       "Destination is not a valid directory",
 		       NULL);
 	}
 }
 /* Highlight a file in the center window given an offset from the currently
  * highlighted index (offset in arg->i)*/
+/* TODO visual selection not updating until you get out of it */
 void
 rel_highlight(const Arg *arg)
 {
-	const Direntry *dir = mainview[CENTER].dir;
+	const Direntry *dir = m_view[CENTER].dir;
 	char *fullpath;
 	int cur_pos, prev_pos;
 
@@ -214,63 +207,53 @@ rel_highlight(const Arg *arg)
 	}
 
 	/* Account for possible offsets in the window */
-	prev_pos = dir->sel_idx - mainview[CENTER].offset;
-	cur_pos = try_highlight(mainview + CENTER, prev_pos + arg->i);
+	prev_pos = dir->sel_idx - m_view[CENTER].offset;
+	cur_pos = try_highlight(m_view + CENTER, prev_pos + arg->i);
 
 	/* If the selected element is a directory, update the right pane
 	 * Otherwise, free it so that refresh_listing will show a blank pane */
 	if (S_ISDIR(dir->tree[dir->sel_idx]->mode)) {
 		fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
-		update_win_with_path(mainview + RIGHT, fullpath);
+		update_win_with_path(m_view + RIGHT, fullpath);
 		free(fullpath);
 	} else {
-		update_win_with_path(mainview + RIGHT, NULL);
+		update_win_with_path(m_view + RIGHT, NULL);
 	}
 
 	/* Update only if we actually moved inside the window */
 	if (cur_pos != prev_pos) {
-		refresh_listing(mainview + RIGHT, 0);
+		refresh_listing(m_view + RIGHT, 0);
 	}
 
-	/* If the page offset doesn't have to be changed, do a simple wrefresh;
+	/* If the directory viuw doesn't have to be changed, do a simple wrefresh;
 	 * otherwise do a full redraw */
-	if (check_offset_changed(mainview + CENTER)) {
-		refresh_listing(mainview + CENTER, 1);
+	if (check_offset_changed(m_view + CENTER) || m_view[CENTER].visual) {
+		refresh_listing(m_view + CENTER, 1);
 	} else {
-		wrefresh(mainview[CENTER].win);
+		wrefresh(m_view[CENTER].win);
 	}
 
-	print_status_top(mainview + TOP);
-	print_status_bottom(mainview + BOT);
+	print_status_top(m_view + TOP);
+	print_status_bottom(m_view + BOT);
+}
+
+void
+visualmode_toggle(const Arg *arg)
+{
+	m_view[CENTER].visual ^= 1;
+	m_view[BOT].visual = m_view[CENTER].visual;
+	m_view[CENTER].dir->tree[m_view[CENTER].dir->sel_idx]->selected ^= 1;
+	refresh_listing(m_view + CENTER, 1);
 }
 
 void
 yank_cur(const Arg *arg)
 {
-	const Direntry *dir;
-	const char *cw_wd, *cw_selname;
+	clip_init(&m_clip, m_view[CENTER].dir, (arg->i == 1 ? OP_COPY : OP_MOVE));
+	clear_dir_selection(m_view[CENTER].dir);
 
-	dir = mainview[CENTER].dir;
-	cw_wd = dir->path;
-	cw_selname = dir->tree[dir->sel_idx]->name;
-
-	if (yankbuf.file) {
-		/* Clear the current yank buffer */
-		free(yankbuf.file);
-	}
-
-	if(!dir->tree[dir->sel_idx]->mode) {
-		/* This is not a file, bail out */
-		return;
-	}
-
-	yankbuf.file = safealloc(sizeof(*yankbuf.file) * (strlen(cw_wd) +
-	                                                  strlen(cw_selname) +
-	                                                  1 + 1));
-	sprintf(yankbuf.file, "%s/%s", cw_wd, cw_selname);
-	yankbuf.preserve_src = arg->i;
-
-	dialog(mainview + BOT, "Selection yanked", NULL);
+	dialog(m_view + BOT, "Selection yanked", NULL);
+	refresh_listing(m_view + CENTER, 1);
 }
 /*}}}*/
 #include "config.h"
@@ -288,18 +271,18 @@ direct_cd(char *path)
 
 	if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
 		fullpath = join_path(path, "../");
-		status |= update_win_with_path(mainview + LEFT, fullpath);
-		status |= update_win_with_path(mainview + CENTER, path);
-		status |= update_win_with_path(mainview + RIGHT, path);
+		status |= update_win_with_path(m_view + LEFT, fullpath);
+		status |= update_win_with_path(m_view + CENTER, path);
+		status |= update_win_with_path(m_view + RIGHT, path);
 		free(fullpath);
-		status |= associate_dir(mainview + BOT, mainview[CENTER].dir);
-		status |= associate_dir(mainview + TOP, mainview[CENTER].dir);
-		status |= refresh_listing(mainview + LEFT, 0);
-		status |= refresh_listing(mainview + CENTER, 1);
-		status |= refresh_listing(mainview + RIGHT, 0);
+		status |= associate_dir(m_view + BOT, m_view[CENTER].dir);
+		status |= associate_dir(m_view + TOP, m_view[CENTER].dir);
+		status |= refresh_listing(m_view + LEFT, 0);
+		status |= refresh_listing(m_view + CENTER, 1);
+		status |= refresh_listing(m_view + RIGHT, 0);
 
-		print_status_top(mainview + TOP);
-		print_status_bottom(mainview + BOT);
+		print_status_top(m_view + TOP);
+		print_status_bottom(m_view + BOT);
 	} else {
 		status = 1;
 	}
@@ -316,22 +299,22 @@ enter_directory()
 	status = 0;
 	/* If type < 0, it's not even a file, but a message (e.g. "inaccessible"):
 	 * don't attempt a cd, just exit */
-	if (mainview[CENTER].dir->tree[mainview[CENTER].dir->sel_idx]->mode == 0) {
+	if (m_view[CENTER].dir->tree[m_view[CENTER].dir->sel_idx]->mode == 0) {
 		status = 1;
 	} else {
-		if (navigate_fwd(mainview + LEFT, mainview + CENTER, mainview + RIGHT))
+		if (navigate_fwd(m_view + LEFT, m_view + CENTER, m_view + RIGHT))
 			die("Couldn't navigate_fwd");
 		/* Update the top and bottom bars to reflect the change in the center
 		 * window, then refresh the main views. The two bar-windows are updated
 		 * every time something happens anyway in the main control loop */
-		status |= associate_dir(mainview + TOP, mainview[CENTER].dir);
-		status |= associate_dir(mainview + BOT, mainview[CENTER].dir);
-		status |= refresh_listing(mainview + LEFT, 0);
-		status |= refresh_listing(mainview + CENTER, 1);
-		status |= refresh_listing(mainview + RIGHT, 0);
+		status |= associate_dir(m_view + TOP, m_view[CENTER].dir);
+		status |= associate_dir(m_view + BOT, m_view[CENTER].dir);
+		status |= refresh_listing(m_view + LEFT, 0);
+		status |= refresh_listing(m_view + CENTER, 1);
+		status |= refresh_listing(m_view + RIGHT, 0);
 
-		print_status_top(mainview + TOP);
-		print_status_bottom(mainview + BOT);
+		print_status_top(m_view + TOP);
+		print_status_bottom(m_view + BOT);
 	}
 	return status;
 }
@@ -344,19 +327,19 @@ exit_directory()
 	int status;
 
 	status = 0;
-	if (navigate_back(mainview + LEFT, mainview + CENTER, mainview + RIGHT))
+	if (navigate_back(m_view + LEFT, m_view + CENTER, m_view + RIGHT))
 		die("Couldn't navigate_back");
 	/* As in enter_directory, update the directories associated to the top and
 	 * bottom bars, and update the views since we've changed their underlying
 	 * associations */
-	status |= associate_dir(mainview + TOP, mainview[CENTER].dir);
-	status |= associate_dir(mainview + BOT, mainview[CENTER].dir);
-	status |= refresh_listing(mainview + LEFT, 0);
-	status |= refresh_listing(mainview + CENTER, 1);
-	status |= refresh_listing(mainview + RIGHT, 0);
+	status |= associate_dir(m_view + TOP, m_view[CENTER].dir);
+	status |= associate_dir(m_view + BOT, m_view[CENTER].dir);
+	status |= refresh_listing(m_view + LEFT, 0);
+	status |= refresh_listing(m_view + CENTER, 1);
+	status |= refresh_listing(m_view + RIGHT, 0);
 
-	print_status_top(mainview + TOP);
-	print_status_bottom(mainview + BOT);
+	print_status_top(m_view + TOP);
+	print_status_bottom(m_view + BOT);
 
 	return status;
 }
@@ -381,29 +364,29 @@ resize_handler()
 	sc_r = nc - mc - sc_l;
 
 	for (i=0; i<WIN_NR; i++) {
-		mvwin(mainview[i].win, 0, 0);
+		mvwin(m_view[i].win, 0, 0);
 	}
 
-	wresize(mainview[TOP].win, 1, nc);
-	mvwin(mainview[TOP].win, 0, 0);
+	wresize(m_view[TOP].win, 1, nc);
+	mvwin(m_view[TOP].win, 0, 0);
 
-	wresize(mainview[BOT].win, 1, nc);
-	mvwin(mainview[BOT].win, nr - 1, 0);
+	wresize(m_view[BOT].win, 1, nc);
+	mvwin(m_view[BOT].win, nr - 1, 0);
 
-	wresize(mainview[LEFT].win, nr - 2, sc_l - 1);
-	mvwin(mainview[LEFT].win, 1, 0);
+	wresize(m_view[LEFT].win, nr - 2, sc_l - 1);
+	mvwin(m_view[LEFT].win, 1, 0);
 
-	wresize(mainview[CENTER].win, nr - 2, mc - 1);
-	mvwin(mainview[CENTER].win, 1, sc_l);
+	wresize(m_view[CENTER].win, nr - 2, mc - 1);
+	mvwin(m_view[CENTER].win, 1, sc_l);
 
-	wresize(mainview[RIGHT].win, nr - 2, sc_r - 1);
-	mvwin(mainview[RIGHT].win, 1, sc_l + mc);
+	wresize(m_view[RIGHT].win, nr - 2, sc_r - 1);
+	mvwin(m_view[RIGHT].win, 1, sc_l + mc);
 
-	print_status_top(mainview + TOP);
-	refresh_listing(mainview + LEFT, 0);
-	refresh_listing(mainview + CENTER, 1);
-	refresh_listing(mainview + RIGHT, 0);
-	print_status_bottom(mainview + BOT);
+	print_status_top(m_view + TOP);
+	refresh_listing(m_view + LEFT, 0);
+	refresh_listing(m_view + CENTER, 1);
+	refresh_listing(m_view + RIGHT, 0);
+	print_status_bottom(m_view + BOT);
 }
 
 
@@ -442,7 +425,7 @@ xdg_open(Direntry *dir)
 
 	/* Ask the user for a command to open the file with */
 	if (!associated) {
-		dialog(mainview + BOT,  "open_with: ", cmd);
+		dialog(m_view + BOT,  "open_with: ", cmd);
 	}
 
 	/* Leave curses mode */
@@ -470,7 +453,7 @@ main(int argc, char *argv[])
 	wchar_t ch;
 
 	/* Initialize the yank buffer */
-	memset(&yankbuf, '\0', sizeof(yankbuf));
+	memset(&m_clip, '\0', sizeof(m_clip));
 
 	/* Initialize ncurses */
 	initscr();                            /* Initialize ncurses sesion */
@@ -483,15 +466,15 @@ main(int argc, char *argv[])
 
 	getmaxyx(stdscr, max_row, max_col);
 
-	init_windows(mainview, max_row, max_col, MAIN_PERC);
-	keypad(mainview[BOT].win, TRUE);
+	init_windows(m_view, max_row, max_col, MAIN_PERC);
+	keypad(m_view[BOT].win, TRUE);
 
 	path = realpath(".", NULL);
 	assert(!direct_cd(path));
 	free(path);
 
 	/* Main control loop */
-	while ((ch = wgetch(mainview[BOT].win)) != 'q') {
+	while ((ch = wgetch(m_view[BOT].win)) != 'q') {
 		/* Call the function associated with the key pressed */
 		if (ch == KEY_RESIZE) {
 			resize_handler();
@@ -507,7 +490,7 @@ main(int argc, char *argv[])
 	}
 
 	/* Terminate ncurses session */
-	deinit_windows(mainview);
+	deinit_windows(m_view);
 	endwin();
 	return 0;
 }

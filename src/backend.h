@@ -14,6 +14,7 @@ typedef struct {
 	WINDOW *win;            /* Ncurses window being managed */
 	Direntry *dir;          /* Directory associated with the view */
 	int offset;	            /* Offset from the beginning of the screen */
+	int visual;
 } Dirview;
 
 int navigate_fwd(Dirview *left, Dirview *center, Dirview *right);

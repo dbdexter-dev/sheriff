@@ -202,7 +202,7 @@ refresh_listing(Dirview *win, int show_sizes)
 		} else {
 			/* Change color based on the entry type */
 			switch (tmpfile->mode & S_IFMT) {
-			case 0:
+			case 0:                 /* Not a file */
 				wattrset(win->win, COLOR_PAIR(PAIR_RED_DEF));
 				break;
 			case S_IFLNK:
@@ -211,7 +211,7 @@ refresh_listing(Dirview *win, int show_sizes)
 			case S_IFDIR:
 				wattrset(win->win, A_BOLD | COLOR_PAIR(PAIR_GREEN_DEF));
 				break;
-			case S_IFBLK:
+			case S_IFBLK:           /* All intentional fallthroughs */
 			case S_IFIFO:
 			case S_IFSOCK:
 			case S_IFCHR:
@@ -267,6 +267,7 @@ try_highlight(Dirview *win, int idx)
 	attr = mvwinch(win->win, row_nr, 0) & (A_COLOR | A_ATTRIBUTES) & ~A_REVERSE;
 	wchgat(win->win, -1, attr, PAIR_NUMBER(attr), NULL);
 
+	/* Update the backend */
 	idx = try_select(win->dir, idx + win->offset, win->visual) - win->offset;
 
 	/* Turn on highlighting for this line */

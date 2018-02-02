@@ -43,6 +43,8 @@ free_listing(Direntry **direntry)
 		return 0;
 	}
 
+	/* If the direntry has a tree, free all the elements in it, then free the
+	 * pointer itself */
 	if ((*direntry)->tree) {
 		for (i=0; i<(*direntry)->max_nodes; i++) {
 			free((*direntry)->tree[i]);
@@ -52,6 +54,7 @@ free_listing(Direntry **direntry)
 		(*direntry)->tree = NULL;
 	}
 
+	/* If there's a path associated to the direntry, free it */
 	if ((*direntry)->path) {
 		free((*direntry)->path);
 		(*direntry)->path = NULL;

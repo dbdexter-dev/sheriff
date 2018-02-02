@@ -1,18 +1,13 @@
 #include <assert.h>
 #include <dirent.h>
-#include <limits.h>
-#include <locale.h>
 #include <ncurses.h>
-#include <signal.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 #include "backend.h"
+#include "dir.h"
 #include "clipboard.h"
 #include "ncutils.h"
 #include "utils.h"
@@ -92,11 +87,16 @@ filesearch(const Arg *arg)
 		}
 	}
 
-	/* If a match has been found, update the right pane and repaint it */
+	/* If a match has been found, update the right pane and repaint it, checking
+	 * whether the selected file is a directory */
 	if (found) {
-		fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
-		update_win_with_path(m_view + RIGHT, fullpath);
-		free(fullpath);
+		if (S_ISDIR(dir->tree[dir->sel_idx]->mode)) {
+			fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
+			update_win_with_path(m_view + RIGHT, fullpath);
+			free(fullpath);
+		} else {
+			update_win_with_path(m_view + RIGHT, NULL);
+		}
 		refresh_listing(m_view + RIGHT, 0);
 		refresh_listing(m_view + CENTER, 1);
 	}
@@ -272,9 +272,9 @@ direct_cd(char *path)
 	if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
 		fullpath = join_path(path, "../");
 		status |= update_win_with_path(m_view + LEFT, fullpath);
+		free(fullpath);
 		status |= update_win_with_path(m_view + CENTER, path);
 		status |= update_win_with_path(m_view + RIGHT, path);
-		free(fullpath);
 		status |= associate_dir(m_view + BOT, m_view[CENTER].dir);
 		status |= associate_dir(m_view + TOP, m_view[CENTER].dir);
 		status |= refresh_listing(m_view + LEFT, 0);

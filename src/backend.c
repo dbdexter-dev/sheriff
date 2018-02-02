@@ -7,6 +7,7 @@
 #include "dir.h"
 #include "utils.h"
 
+/* Associate a Direntry struct with a Dirview */
 int
 associate_dir(Dirview *view, Direntry *direntry)
 {
@@ -17,6 +18,7 @@ associate_dir(Dirview *view, Direntry *direntry)
 	return 0;
 }
 
+/* Navigate back out of a directory, updating the Direntries */
 int
 navigate_back(Dirview *left, Dirview *center, Dirview *right)
 {

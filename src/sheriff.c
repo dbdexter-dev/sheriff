@@ -13,7 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "backend.h"
-#include "fileops.h"
+#include "clipboard.h"
 #include "ncutils.h"
 #include "utils.h"
 
@@ -160,7 +160,7 @@ paste_cur(const Arg *arg)
 
 	clip_exec(&m_clip, dir->path);
 	clip_clear(&m_clip);
-	visualmode_toggle(NULL);
+	m_view[CENTER].visual = 0;
 
 	dialog(m_view + BOT, "Selection pasted", NULL);
 
@@ -491,6 +491,7 @@ main(int argc, char *argv[])
 
 	/* Terminate ncurses session */
 	deinit_windows(m_view);
+	clip_clear(&m_clip);
 	endwin();
 	return 0;
 }

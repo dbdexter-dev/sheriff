@@ -22,8 +22,8 @@ given function is reduced. Here's a tl;dr of what each .c file contains:
   basis, so refreshing a listing, redrawing a bar, that sort of thing.
 * **dir.c**: functions that deal with the Direntry backend, populating Fileentry
   arrays and updating values inside the Direntry struct.
-* **fileops.c**: functions that abstract filesystem operations, e.g. move, copy,
-  link, mkdir.
+* **clipboard.c**: functions that deal with operating on files in a clipboard,
+  e.g. moving, copying, deleting, linking, and the like.
 * **utils.c**: simple, random utility functions that manipulate primitive C data
   types.
 

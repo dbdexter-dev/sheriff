@@ -29,7 +29,5 @@ typedef struct {
 int clip_clear(Clipboard *clip);
 int clip_exec(Clipboard *clip, char *destpath);
 int clip_init(Clipboard *clip, Direntry *dir, int op);
-int move_file(char *src, char *dest, int preserve_src);
-int delete_file(char *fname);
 
 #endif

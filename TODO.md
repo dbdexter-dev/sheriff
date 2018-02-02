@@ -3,13 +3,18 @@
 * Reduce the number of #define directives
 * Enable top bar truncation a la fish
 * Allow traversing links if they link to directories
-* Implement file moving/deleting/yanking
-* Implement file selection
 * Add tabbed navigation
+* Asynchronous directory updates (i.e. don't lock up when copying files)
+
+# Config.h
+* Add highlighting options
 
 # Dir.c/Backend.c
 * Implement directory list caching
 
 Also:
 * The UI shits itself when unicode is involved
-* How about this: instead of freeing and allocating memory every time the directory changes, keep a max\_nodes count in the struct direntry*, and allocate nodes as needed when the directory structure changes. Never free any of the tree nodes, right until the very end. This increases the total memory usage at any point, but the overall alloc'd space is significantly lower, and so is the time wasted in system calls.
+* Kill the zombies ffs, and refresh after waitpid()
+* Something's wrong with the search: highlight a directory, then search for a
+  file. Third pane shits itself.
+* Changing focus causes extraneous input when a file is opened with vim

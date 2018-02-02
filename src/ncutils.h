@@ -24,21 +24,21 @@
 /* Convenient enum to address a specific view in main_view */
 enum windows
 {
-	TOP_WIN = 0,
-	LEFT_WIN = 1,
-	CENTER_WIN = 2,
-	RIGHT_WIN = 3,
-	BOT_WIN = 4
+	TOP = 0,
+	LEFT = 1,
+	CENTER = 2,
+	RIGHT = 3,
+	BOT = 4
 };
 
-int  check_offset_changed(Dirview* win);
+int  check_offset_changed(Dirview *win);
 int  deinit_windows(Dirview view[WIN_NR]);
-void dialog(Dirview* view, char* msg, char* buf);
+void dialog(Dirview *view, char *msg, char *buf);
 void init_colors();
 int  init_windows(Dirview view[WIN_NR], int w, int h, float main_perc);
-void print_status_bottom(Dirview* win);
-void print_status_top(Dirview* win);
-int  refresh_listing(Dirview* win, int show_sizes);
-int  try_highlight(Dirview* win, int idx);
+void print_status_bottom(Dirview *win);
+void print_status_top(Dirview *win);
+int  refresh_listing(Dirview *win, int show_sizes);
+int  try_highlight(Dirview *win, int idx);
 
 #endif

@@ -1,32 +1,34 @@
-SRC=$(wildcard *.c)
-OBJ=${SRC:.c=.o}
+export CFLAGS =-pipe -Wall -std=c99 -pedantic -D _GNU_SOURCE
+export LDFLAGS =-lncurses
+PREFIX = /usr
 
-CFLAGS =-pipe -Wall
-LDFLAGS =-lncurses
+.PHONY: default debug release src unittests clean install uninstall
 
-all: debug
+default: debug
 
-debug : CFLAGS += -g -Werror
-debug: sheriff
+debug: CFLAGS += -g -Werror
+debug: src unittests
 
-release : CFLAGS += -O2 -march=native -mtune=native
-release: sheriff strip
+release: CFLAGS += -O2 -march=native -mtune=native
+release: src strip
 
-.PHONY: clean all debug release strip
-
-strip: sheriff
-	strip $^
-
-sheriff: ${OBJ}
-	gcc ${LDFLAGS} -o $@ $^
-
-# Custom rule for sheriff.o so that config.h is
-# taken into consideration
-sheriff.o: sheriff.c config.h
-	gcc ${CFLAGS} -c -o $@ $<
-
-%.o: %.c
-	gcc ${CFLAGS} -c -o $@ $<
+src:
+	$(MAKE) -C $@
+tests:
+	$(MAKE) -C $@
+strip:
+	strip src/sheriff
 
 clean:
-	rm -fv ${OBJ} sheriff
+	$(MAKE) -C src clean
+	$(MAKE) -C tests clean
+
+install: src
+	@echo installing executable file to ${PREFIX}/bin
+	@mkdir -p ${PREFIX}/bin
+	@cp -f src/sheriff ${PREFIX}/bin
+	@chmod 755 ${PREFIX}/bin/sheriff
+
+uninstall:
+	@echo removing executable file from ${PREFIX}/bin
+	@rm -f ${PREFIX}/bin/sheriff

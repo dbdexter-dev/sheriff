@@ -10,16 +10,16 @@
 #include <ncurses.h>
 #include "dir.h"
 
-typedef struct
-{
-	WINDOW* win;            /* Ncurses window being managed */
-	struct direntry* dir;   /* Directory associated with the view */
+typedef struct {
+	WINDOW *win;            /* Ncurses window being managed */
+	Direntry *dir;          /* Directory associated with the view */
 	int offset;	            /* Offset from the beginning of the screen */
+	int visual;
 } Dirview;
 
-int navigate_fwd(Dirview* left, Dirview* center, Dirview* right);
-int navigate_back(Dirview* left, Dirview* center, Dirview* right);
-int associate_dir(Dirview* view, struct direntry* direntry);
-int update_win_with_path(Dirview* win, char* parent, fileentry_t* leaf);
+int navigate_fwd(Dirview *left, Dirview *center, Dirview *right);
+int navigate_back(Dirview *left, Dirview *center, Dirview *right);
+int associate_dir(Dirview *view, Direntry *direntry);
+int update_win_with_path(Dirview *win, const char *path);
 
 #endif

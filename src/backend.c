@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <assert.h>
 #include <dirent.h>
 #include <stdlib.h>
@@ -10,7 +8,7 @@
 #include "utils.h"
 
 int
-associate_dir(Dirview* view, struct direntry* direntry)
+associate_dir(Dirview *view, Direntry *direntry)
 {
 	assert(view);
 	assert(direntry);
@@ -20,10 +18,10 @@ associate_dir(Dirview* view, struct direntry* direntry)
 }
 
 int
-navigate_back(Dirview* left, Dirview* center, Dirview* right)
+navigate_back(Dirview *left, Dirview *center, Dirview *right)
 {
-	fileentry_t tmp = {.name = "../", .mode = S_IFDIR};
-	struct direntry* tmpdir;
+	Direntry *tmpdir;
+	char *fullpath;
 
 	/* Rotate right by one the allocated directories */
 	tmpdir = right->dir;
@@ -36,23 +34,27 @@ navigate_back(Dirview* left, Dirview* center, Dirview* right)
 	left->offset = 0;
 
 	assert(center->dir->path);
+	fullpath = join_path(center->dir->path, "../");
 
 	/* Init left pane with parent directory contents */
-	update_win_with_path(left, center->dir->path, &tmp);
+	update_win_with_path(left, fullpath);
+	free(fullpath);
 
 	return 0;
 }
 
 /* Navigate forward in the directory listing */
 int
-navigate_fwd(Dirview* left, Dirview* center, Dirview* right)
+navigate_fwd(Dirview *left, Dirview *center, Dirview *right)
 {
-	fileentry_t* centersel;
-	struct direntry* tmpdir;
+	Fileentry* centersel;
+	Direntry *tmpdir;
+	char *fullpath;
 
 	centersel = center->dir->tree[center->dir->sel_idx];
-	if(!S_ISDIR(centersel->mode))
-		return 1;
+	if (!S_ISDIR(centersel->mode)) {
+		return -1;
+	}
 
 	/* Rotate left by one the allocated directories */
 	tmpdir = left->dir;
@@ -66,32 +68,22 @@ navigate_fwd(Dirview* left, Dirview* center, Dirview* right)
 
 	assert(center->dir->path);
 	centersel = center->dir->tree[center->dir->sel_idx];
+	fullpath = join_path(center->dir->path, centersel->name);
 
 	/* Init right pane with child directory contents */
-	update_win_with_path(right, center->dir->path, centersel);
+	update_win_with_path(right, fullpath);
+	free(fullpath);
 
 	return 0;
 }
 
+/* Update a window with a given path, which can also be NULL. In that case, the
+ * window passed as an argument is initialized empty. XXX this funcion used to
+ * be a bit more complex, now it's just here in case that complexity arises in
+ * the future */
 int
-update_win_with_path(Dirview* win, char* parent, fileentry_t* leaf)
+update_win_with_path(Dirview *win, const char *path)
 {
-	char* tmp;
-	/* If leaf is a directory, populate with the contents of said directory;
-	 * otherwise, just put up a blank view. Also has the nice side effect that
-	 * you can initialize a window to blank by passing NULL to either parent or
-	 * leaf */
-	if(leaf && S_ISDIR(leaf->mode) && parent)
-	{
-		tmp = safealloc(sizeof(*tmp) * (strlen(parent) + strlen(leaf->name) + 1 + 1));
-		sprintf(tmp, "%s/%s", parent, leaf->name);
-		init_listing(&(win->dir), tmp);
-		free(tmp);
-
-		win->offset = 0;
-	}
-	else
-		init_listing(&(win->dir), NULL);
-
+	init_listing(&(win->dir), path);
 	return 0;
 }

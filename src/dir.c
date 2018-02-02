@@ -146,7 +146,8 @@ snapshot_tree_selected(Direntry **dest, Direntry *src)
 	return 0;
 }
 
-/* Try to select the idxth element in the list */
+/* Try to select the idxth element in the list, and return the index of the line
+ * that was actually selected */
 int
 try_select(Direntry *direntry, int idx, int mark)
 {
@@ -178,7 +179,7 @@ try_select(Direntry *direntry, int idx, int mark)
 	return direntry->sel_idx;
 }
 
-/* Static functions *//*{{{*/
+/* Static functions {{{*/
 /* Populate a Fileentry list with a directory listing */
 int
 populate_tree(Direntry *dir, const char *path)

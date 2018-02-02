@@ -2,15 +2,21 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdlib.h>
+#include "clipboard.h"
 #include "dir.h"
-#include "fileops.h"
 #include "utils.h"
+
+static int move_file(char *src, char *dest, int preserve_src);
+static int delete_file(char *fname);
 
 /* Deallocate the stuff in a clipboard */
 int
 clip_clear(Clipboard *clip)
 {
-	free_listing(&(clip->dir));
+	if (clip->dir) {
+		free_listing(&(clip->dir));
+		clip->dir = NULL;
+	}
 	clip->op = 0;
 	return 0;
 }
@@ -27,17 +33,24 @@ clip_exec(Clipboard *clip, char *destpath)
 		for (i=0; i<clip->dir->count; i++) {
 			tmppath = join_path(clip->dir->path, clip->dir->tree[i]->name);
 			move_file(destpath, tmppath, 1);
+			free(tmppath);
 		}
 		break;
 	case OP_MOVE:
 		for (i=0; i<clip->dir->count; i++) {
 			tmppath = join_path(clip->dir->path, clip->dir->tree[i]->name);
 			move_file(destpath, tmppath, 0);
+			free(tmppath);
 		}
 		break;
 	case OP_LINK:
 		break;
 	case OP_DELETE:
+		for (i=0; i<clip->dir->count; i++) {
+			tmppath = join_path(clip->dir->path, clip->dir->tree[i]->name);
+			delete_file(tmppath);
+			free(tmppath);
+		}
 		break;
 	case OP_RENAME:
 		break;

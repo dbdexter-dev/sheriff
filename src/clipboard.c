@@ -28,6 +28,10 @@ clip_exec(Clipboard *clip, char *destpath)
 	int i;
 	char* tmppath;
 
+	if (!(clip->dir)) {
+		return 1;
+	}
+
 	switch(clip->op) {
 	case OP_COPY:
 		for (i=0; i<clip->dir->count; i++) {

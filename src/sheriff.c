@@ -327,8 +327,9 @@ exit_directory()
 	int status;
 
 	status = 0;
-	if (navigate_back(m_view + LEFT, m_view + CENTER, m_view + RIGHT))
+	if (navigate_back(m_view + LEFT, m_view + CENTER, m_view + RIGHT)) {
 		die("Couldn't navigate_back");
+	}
 	/* As in enter_directory, update the directories associated to the top and
 	 * bottom bars, and update the views since we've changed their underlying
 	 * associations */
@@ -443,6 +444,7 @@ xdg_open(Direntry *dir)
 	/* Restore curses mode */
 	reset_prog_mode();
 	free(fname);
+	refresh();
 }
 
 int

@@ -398,6 +398,7 @@ xdg_open(Direntry *dir)
 	char *fname, *ext;
 	char cmd[MAXCMDLEN+1];
 	int i, associated;
+	int chld_stat;
 	pid_t pid;
 
 	fname = safealloc(sizeof(*fname) * (strlen(dir->path) +
@@ -436,15 +437,18 @@ xdg_open(Direntry *dir)
 	/* Spawn the requested command */
 	if (!(pid = fork())) {
 		execlp(cmd, cmd, fname, NULL);
-		exit(0);
-	} else {
-		waitpid(pid, NULL, 0);
+		return;
 	}
+
+	waitpid(pid, &chld_stat, 0);
+
+	free(fname);
 
 	/* Restore curses mode */
 	reset_prog_mode();
-	free(fname);
-	refresh();
+	for (i=0; i<WIN_NR; i++) {
+		wrefresh(m_view[i].win);
+	}
 }
 
 int

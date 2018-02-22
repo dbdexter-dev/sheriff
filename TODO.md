@@ -14,5 +14,4 @@
 
 Also:
 * The UI shits itself when unicode is involved
-* Kill the zombies ffs, and refresh after waitpid()
 * Changing focus causes extraneous input when a file is opened with vim

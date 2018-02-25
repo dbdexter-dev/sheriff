@@ -6,61 +6,21 @@
 #include "ncutils.h"
 #include "utils.h"
 
-/* Update window offset if needed, return 1 if we did change offset,
- * 0 otherwise */
-int
-check_offset_changed(Dirview *win)
-{
-	int nr;
-	nr = getmaxy(win->win);
-
-	if (win->dir->sel_idx - win->offset >= nr) {
-		win->offset = (win->dir->sel_idx - nr + 1);
-		return 1;
-	} else if (win->dir->sel_idx - win->offset < 0) {
-		win->offset = win->dir->sel_idx;
-		return 1;
-	}
-	return 0;
-}
-/* Deinitialize windows, right before exiting. This deallocates all memory
- * dedicated to Fileentry* arrays and their paths as well */
-int
-deinit_windows(Dirview view[WIN_NR])
-{
-	int i;
-
-	assert(view);
-	/* Deallocate directory listings. Top and bottom windows
-	 * inherit the CENTER path, so there's no need to free those two */
-	for (i=0; i<WIN_NR; i++) {
-		if (view[i].dir && i != TOP && i != BOT) {
-			assert(!free_listing(&view[i].dir));
-		}
-	}
-
-	for (i=0; i<WIN_NR; i++) {
-		delwin(view[i].win);
-	}
-
-	return 0;
-}
-
 /* Render a dialog prompt in a specified window. Will return the input string
  * through char *input, or just print msg if input == NULL*/
 void
-dialog(Dirview *win, char *msg, char *input)
+dialog(WINDOW *win, char *msg, char *input)
 {
-	werase(win->win);
-	wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
-	mvwprintw(win->win, 0, 0, msg);
+	werase(win);
+	wattrset(win, COLOR_PAIR(PAIR_WHITE_DEF));
+	mvwprintw(win, 0, 0, msg);
 
 	if (input) {
 		echo();
 		curs_set(1);
 
-		wgetnstr(win->win, input, MAXCMDLEN);
-		werase(win->win);
+		wgetnstr(win, input, MAXCMDLEN);
+		werase(win);
 
 		curs_set(0);
 		noecho();
@@ -79,86 +39,40 @@ init_colors(void)
 	init_pair(PAIR_WHITE_DEF, COLOR_WHITE, -1);
 }
 
-/* Initialize the sub-windows that make up the main view */
-int
-init_windows(Dirview view[WIN_NR], int row, int col, float main_perc)
-{
-	int i, mc, sc_l, sc_r;
-
-	if (!view) {
-		return -1;
-	}
-
-	/* Calculate center window and sidebars column count */
-	mc = col  *main_perc;
-	sc_r = (col - mc) / 2;
-	sc_l = col - mc - sc_r;
-
-	view[TOP].win = newwin(1, col, 0, 0);
-	view[BOT].win = newwin(1, col, row - 1, 0);
-	view[LEFT].win = newwin(row - 2, sc_l - 1, 1, 0);
-	view[CENTER].win = newwin(row - 2, mc - 1, 1, sc_l);
-	view[RIGHT].win = newwin(row - 2, sc_r, 1, sc_l + mc);
-
-	/* Initialize the view offsets */
-	for (i=0; i<WIN_NR; i++) {
-		view[i].offset = 0;
-	}
-
-	return 0;
-}
-
 /* Update the bottom status bar. Format: <permissions>  <uid>  <gid>  <last
  * modified> */
 void
-print_status_bottom(Dirview *win)
+print_status_bottom(WINDOW *win, mode_t raw_m, struct tm *mtime, int uid, int gid)
 {
 	char mode[10+1];                /* Something like -rwxr-xr-x */
 	char last_modified[MAXDATELEN+1];
-	struct tm *mtime;
-	const Fileentry *sel;
 
-	sel = win->dir->tree[win->dir->sel_idx];
-
-	octal_to_str(sel->mode, mode);
-	mtime = localtime(&(sel->lastchange));
+	octal_to_str(raw_m, mode);
 	strftime(last_modified, MAXDATELEN, "%F %R", mtime);
 
-	assert(win->win);
-	werase(win->win);
-	wattrset(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
-	mvwprintw(win->win, 0, 0, "%s ", mode);
-	wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
-	wprintw(win->win," %d  %d  %s", sel->uid, sel->gid, last_modified);
+	assert(win);
+	werase(win);
+	wattrset(win, COLOR_PAIR(PAIR_GREEN_DEF));
+	mvwprintw(win, 0, 0, "%s ", mode);
+	wattrset(win, COLOR_PAIR(PAIR_WHITE_DEF));
+	wprintw(win," %d  %d  %s", uid, gid, last_modified);
 
-	wrefresh(win->win);
+	wrefresh(win);
 }
 
 /* Updates the top status bar. Format: <user>@<host> $PWD/<highlighted entry> */
 void
-print_status_top(Dirview *win)
+print_status_top(WINDOW *win, char *user, char *wd, char *hostn, char *hi)
 {
-	char *username;
-	char *workdir;
-	char hostname[MAXHOSTNLEN+1];
+	werase(win);
+	wattrset(win, A_BOLD | COLOR_PAIR(PAIR_BLUE_DEF));
+	mvwprintw(win, 0, 0, "%s@%s", user, hostn);
+	wattron(win, COLOR_PAIR(PAIR_GREEN_DEF));
+	wprintw(win, " %s/", wd);
+	wattron(win, COLOR_PAIR(PAIR_WHITE_DEF));
+	wprintw(win, "%s", hi);
 
-	username = getenv("USER");
-	workdir = win->dir->path;
-	gethostname(hostname, MAXHOSTNLEN);
-
-	assert(username);
-	assert(workdir);
-	assert(win->win);
-
-	werase(win->win);
-	wattrset(win->win, A_BOLD | COLOR_PAIR(PAIR_BLUE_DEF));
-	mvwprintw(win->win, 0, 0, "%s@%s", username, hostname);
-	wattron(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
-	wprintw(win->win, " %s/", workdir);
-	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
-	wprintw(win->win, "%s", win->dir->tree[win->dir->sel_idx]->name);
-
-	wrefresh(win->win);
+	wrefresh(win);
 }
 
 /* Render a directory listing on a window. If the directoly listing is NULL,
@@ -248,33 +162,21 @@ refresh_listing(Dirview *win, int show_sizes)
 	return 0;
 }
 
-/* Try to highlight the idxth line, deselecting the previous one. Returns the
- * number of the line that was actually selected */
-int
-try_highlight(Dirview *win, int idx)
+
+void
+change_highlight(WINDOW *win, int oidx, int nidx)
 {
 	int savedrow, savedcol;
-	int row_nr;
 	attr_t attr;
 
 	assert(win);
-	assert(win->win);
+	getyx(win, savedrow, savedcol);
 
-	getyx(win->win, savedrow, savedcol);
-	row_nr = win->dir->sel_idx - win->offset;
+	attr = mvwinch(win, oidx, 0) & (A_COLOR | A_ATTRIBUTES) & ~A_REVERSE;
+	wchgat(win, -1, attr, PAIR_NUMBER(attr), NULL);
+	attr = (mvwinch(win, nidx, 0) & (A_COLOR | A_ATTRIBUTES)) | A_REVERSE;
+	wchgat(win, -1, attr, PAIR_NUMBER(attr), NULL);
 
-	/* Turn off highlighting for the previous line */
-	attr = mvwinch(win->win, row_nr, 0) & (A_COLOR | A_ATTRIBUTES) & ~A_REVERSE;
-	wchgat(win->win, -1, attr, PAIR_NUMBER(attr), NULL);
-
-	/* Update the backend */
-	idx = try_select(win->dir, idx + win->offset, win->visual) - win->offset;
-
-	/* Turn on highlighting for this line */
-	attr = (mvwinch(win->win, idx, 0) & (A_COLOR | A_ATTRIBUTES)) | A_REVERSE;
-	wchgat(win->win, -1, attr, PAIR_NUMBER(attr), NULL);
-
-	/* Restore cursor position */
-	wmove(win->win, savedrow, savedcol);
-	return idx;
+	wmove(win, savedrow, savedcol);
+	return;
 }

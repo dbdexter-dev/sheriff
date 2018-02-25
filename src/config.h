@@ -28,6 +28,10 @@ static Key d_multi[] = {
 	{ '\0',         NULL,               {0}},
 };
 
+static Key g_multi[] = {
+	{ 'g',          abs_highlight,      {.i = 0}},
+};
+
 static Key y_multi[] = {
 	{ 'y',          yank_cur,           {.i = 1}},
 	{ '\0',         NULL,               {0}},
@@ -38,6 +42,7 @@ static Key keys[] = {
 	{ 'k',          rel_highlight,      {.i = -1}},
 	{ 'h',          navigate,           {.i = -1}},
 	{ 'l',          navigate,           {.i = +1}},
+	{ '\n',         navigate,           {.i = +1}},
 	{ KEY_UP,       rel_highlight,      {.i = -1}},
 	{ KEY_DOWN,     rel_highlight,      {.i = +1}},
 	{ KEY_LEFT,     navigate,           {.i = -1}},
@@ -47,6 +52,8 @@ static Key keys[] = {
 	{ 'y',          multibind,          {.v = y_multi}},
 	{ 'd',          multibind,          {.v = d_multi}},
 	{ 'c',          multibind,          {.v = c_multi}},
+	{ 'g',          multibind,          {.v = g_multi}},
+	{ 'G',          abs_highlight,      {.i = -1}},
 	{ 'p',          paste_cur,          {0}},
 	{ 'v',          visualmode_toggle,  {0}},
 /*	{ '!',          shell_exec,         {0}}, */

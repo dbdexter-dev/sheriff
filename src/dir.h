@@ -1,7 +1,7 @@
 /**
  * The main directory manipulation functions are here. Most of the low-level
  * ones are declared static inside dir.c, while the ones listed here are
- * expected to be used inside sheriff.h and backend.h when needed.
+ * expected to be used inside sheriff.c and backend.c when needed.
  */
 #ifndef DIR_H
 #define DIR_H

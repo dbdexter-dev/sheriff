@@ -7,8 +7,6 @@
 
 #include "backend.h"
 
-#define WIN_NR 5
-
 #define PAIR_BLUE_DEF 1
 #define PAIR_GREEN_DEF 2
 #define PAIR_WHITE_DEF 3
@@ -18,7 +16,6 @@
 
 #define MAXCMDLEN 128
 #define MAXDATELEN 18
-#define MAXHOSTNLEN 32
 #define HUMANSIZE_LEN 6
 
 /* Convenient enum to address a specific view in main_view */
@@ -31,14 +28,11 @@ enum windows
 	BOT = 4
 };
 
-int  check_offset_changed(Dirview *win);
-int  deinit_windows(Dirview view[WIN_NR]);
-void dialog(Dirview *view, char *msg, char *buf);
+void change_highlight(WINDOW* win, int old_idx, int new_idx);
+void dialog(WINDOW *win, char *msg, char *buf);
 void init_colors();
-int  init_windows(Dirview view[WIN_NR], int w, int h, float main_perc);
-void print_status_bottom(Dirview *win);
-void print_status_top(Dirview *win);
+void print_status_bottom(WINDOW *win, mode_t mode, struct tm *mt, int uid, int gid);
+void print_status_top(WINDOW *win, char *user, char *wd, char *hostn, char *hi);
 int  refresh_listing(Dirview *win, int show_sizes);
-int  try_highlight(Dirview *win, int idx);
 
 #endif

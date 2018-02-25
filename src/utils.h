@@ -1,6 +1,6 @@
 /**
- *Various simple accessory functions, that mostly operate on native data types
- *(e.g char*, int, and the like).
+ * Various simple accessory functions, that mostly operate on native data types
+ * (e.g char*, int, and the like).
  */
 #ifndef UTILS_H
 #define UTILS_H

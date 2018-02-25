@@ -43,6 +43,8 @@ free_listing(Direntry **direntry)
 		return 0;
 	}
 
+	/* If the direntry has a tree, free all the elements in it, then free the
+	 * pointer itself */
 	if ((*direntry)->tree) {
 		for (i=0; i<(*direntry)->max_nodes; i++) {
 			free((*direntry)->tree[i]);
@@ -52,6 +54,7 @@ free_listing(Direntry **direntry)
 		(*direntry)->tree = NULL;
 	}
 
+	/* If there's a path associated to the direntry, free it */
 	if ((*direntry)->path) {
 		free((*direntry)->path);
 		(*direntry)->path = NULL;
@@ -349,7 +352,7 @@ quicksort(Fileentry* *tree, int istart, int iend)
 int
 sort_tree(Direntry *dir)
 {
-	int i, j;
+	int i, j, files_present;
 	Fileentry* *tree = dir->tree;
 
 	if (!tree) {
@@ -359,9 +362,14 @@ sort_tree(Direntry *dir)
 	/* Split directories and files first.
 	 * j points to the beginning of the files, i to the end of the directories.
 	 * What lies in between has yet to be sorted */
-	j = dir->count - 1;
+	j = dir->count;
+	files_present = 0;
 	for (i=0; i<j; i++) {
 		if (!S_ISDIR(tree[i]->mode)) {
+			if (j == dir->count) {
+				j--;
+				files_present = 1;
+			}
 			for (; j>i && !S_ISDIR(tree[j]->mode); j--)
 				;
 			tree_xchg(tree, i, j);
@@ -371,7 +379,9 @@ sort_tree(Direntry *dir)
 	quicksort(dir->tree, 0, j - 1);
 
 	/* Sort files */
-	quicksort(dir->tree, j, dir->count-1);
+	if (files_present) {
+		quicksort(dir->tree, j, dir->count-1);
+	}
 	return 0;
 }
 

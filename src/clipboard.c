@@ -28,6 +28,10 @@ clip_exec(Clipboard *clip, char *destpath)
 	int i;
 	char* tmppath;
 
+	if (!(clip->dir)) {
+		return 1;
+	}
+
 	switch(clip->op) {
 	case OP_COPY:
 		for (i=0; i<clip->dir->count; i++) {
@@ -60,10 +64,10 @@ clip_exec(Clipboard *clip, char *destpath)
 	return 0;
 }
 
-/* TODO only copy the files we need aka those with the "selected" flag set */
 int
 clip_init(Clipboard *clip, Direntry* dir, int op)
 {
+	/* Overwrite the clipboard contents, if any */
 	if (clip->dir) {
 		clip_clear(clip);
 	}
@@ -72,6 +76,8 @@ clip_init(Clipboard *clip, Direntry* dir, int op)
 	snapshot_tree_selected(&(clip->dir), dir);
 	return 0;
 }
+
+/* Static functions {{{*/
 
 /* Perma-delete a file */
 int
@@ -119,3 +125,4 @@ move_file(char *dest, char *src, int preserve_src)
 
 	return 0;
 }
+/*}}}*/

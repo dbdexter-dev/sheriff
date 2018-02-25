@@ -13,6 +13,5 @@
 * Implement directory list caching
 
 Also:
-* The UI shits itself when unicode is involved
 * Changing focus causes extraneous input when a file is opened with vim
 * TERM=xterm-256color messes with the highlighting

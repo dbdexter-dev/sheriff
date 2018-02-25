@@ -1,5 +1,5 @@
-export CFLAGS =-pipe -Wall -std=c99 -pedantic -D _GNU_SOURCE
-export LDFLAGS =-lncurses
+export CFLAGS =-pipe -Wall -std=c99 -pedantic -D _GNU_SOURCE -D _XOPEN_SOURCE_EXTENDED
+export LDFLAGS =-lncursesw
 PREFIX = /usr
 
 .PHONY: default debug release src unittests clean install uninstall

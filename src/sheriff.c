@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <dirent.h>
+#include <locale.h>
 #include <ncurses.h>
 #include <stdlib.h>
 #include <string.h>
@@ -485,6 +486,9 @@ main(int argc, char *argv[])
 	int i, max_row, max_col;
 	char *path;
 	wchar_t ch;
+
+	/* Enable unicode goodness */
+	setlocale(LC_ALL, "");
 
 	/* Initialize the yank buffer */
 	memset(&m_clip, '\0', sizeof(m_clip));

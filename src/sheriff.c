@@ -4,6 +4,7 @@
 #include <ncurses.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -263,6 +264,9 @@ rel_highlight(const Arg *arg)
 	}
 
 	abs_pos = dir->sel_idx + arg->i;
+	if (abs_pos < 0) {
+		abs_pos = 0;
+	}
 	abs_highlight((Arg*)&abs_pos);
 }
 
@@ -427,7 +431,7 @@ xdg_open(Direntry *dir)
 	char *fname, *ext;
 	char cmd[MAXCMDLEN+1];
 	int i, associated;
-	int chld_stat;
+	int wstatus;
 	pid_t pid;
 
 	fname = safealloc(sizeof(*fname) * (strlen(dir->path) +
@@ -465,11 +469,12 @@ xdg_open(Direntry *dir)
 
 	/* Spawn the requested command */
 	if (!(pid = fork())) {
-		execlp(cmd, cmd, fname, NULL);
-		return;
+		exit(execlp(cmd, cmd, fname, NULL));
 	}
 
-	waitpid(pid, &chld_stat, 0);
+	do {
+		waitpid(pid, &wstatus, 0);
+	} while (!WIFEXITED(wstatus));
 
 	free(fname);
 

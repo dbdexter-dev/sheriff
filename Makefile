@@ -2,12 +2,12 @@ export CFLAGS =-pipe -Wall -std=c99 -pedantic -D _GNU_SOURCE -D _XOPEN_SOURCE_EX
 export LDFLAGS =-lncursesw
 PREFIX = /usr
 
-.PHONY: default debug release src unittests clean install uninstall
+.PHONY: default debug release src tests strip clean install uninstall
 
 default: debug
 
 debug: CFLAGS += -g -Werror
-debug: src unittests
+debug: src tests
 
 release: CFLAGS += -O2 -march=native -mtune=native
 release: src strip

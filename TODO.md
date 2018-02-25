@@ -12,6 +12,5 @@
 # Dir.c/Backend.c
 * Implement directory list caching
 
-Also:
-* Changing focus causes extraneous input when a file is opened with vim
-* TERM=xterm-256color messes with the highlighting
+# Clipboard.c
+* Rewrite a custom copy-paste function that reports the progress

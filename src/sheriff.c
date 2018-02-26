@@ -37,8 +37,8 @@ static void  resize_handler();
 static void  xdg_open(Direntry *file);
 
 static void  abs_highlight(const Arg *arg);
+static void  chain(const Arg *arg);
 static void  filesearch(const Arg *arg);
-static void  multibind(const Arg *arg);
 static void  navigate(const Arg *arg);
 static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
@@ -163,7 +163,7 @@ filesearch(const Arg *arg)
 /* Meta-keybinding function, so that you can chain multiple characters together
  * to perform a single action */
 void
-multibind(const Arg *arg)
+chain(const Arg *arg)
 {
 	wchar_t ch;
 	int i;

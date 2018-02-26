@@ -79,6 +79,13 @@ navigate_fwd(Dirview *left, Dirview *center, Dirview *right)
 	return 0;
 }
 
+int
+rescan_win(Dirview *win)
+{
+	rescan_listing(win->dir);
+	return 0;
+}
+
 /* Update a window with a given path, which can also be NULL. In that case, the
  * window passed as an argument is initialized empty. XXX this funcion used to
  * be a bit more complex, now it's just here in case that complexity arises in

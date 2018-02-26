@@ -81,7 +81,6 @@ init_listing(Direntry **direntry, const char *path)
 	} else {
 		/* Semi-initialize a dirty direntry struct */
 		(*direntry)->count = 0;
-		(*direntry)->sel_idx = 0;
 	}
 
 	if ((*direntry)->path) {
@@ -98,7 +97,15 @@ init_listing(Direntry **direntry, const char *path)
 
 	(*direntry)->sel_idx = 0;
 	clear_dir_selection(*direntry);
+	return 0;
+}
 
+int
+rescan_listing(Direntry *direntry)
+{
+	populate_tree(direntry, direntry->path);
+	sort_tree(direntry);
+	clear_dir_selection(direntry);
 	return 0;
 }
 

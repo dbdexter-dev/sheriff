@@ -17,6 +17,7 @@
 #include "utils.h"
 
 #define MAIN_PERC 0.6
+#define UPD_INT 0.5
 #define MAXSEARCHLEN MAXCMDLEN
 
 typedef union {
@@ -33,8 +34,9 @@ typedef struct {
 static int   direct_cd(char *center_path);
 static int   enter_directory();
 static int   exit_directory();
+static void  queue_update();
 static void  resize_handler();
-static void  update_center();
+static void  update_reaper();
 static void  xdg_open(Direntry *file);
 
 /* Functions that can be used in config.h */
@@ -54,6 +56,7 @@ static void  yank_cur(const Arg *arg);
  */
 static Dirview m_view[WIN_NR];
 static Clipboard m_clip;
+static sem_t m_sem;
 
 /* Keybind handlers {{{*/
 
@@ -380,6 +383,12 @@ exit_directory()
 	return status;
 }
 
+void
+queue_update()
+{
+	sem_post(&m_sem);
+}
+
 /* Handler that takes care of resizing the subviews when a SIGWINCH is received.
  * This function is one of the reasons why there has to be a global array of
  * Dirview ptrs */
@@ -425,18 +434,14 @@ resize_handler()
 	update_status_bottom(m_view + BOT);
 }
 
-/* Update center window when notified */
+/* Run update when notified */
 void
-update_center()
+update_reaper()
 {
-	char *tmp;
-
-	tmp = join_path(m_view[CENTER].dir->path, "");
-	update_win_with_path(m_view + CENTER, tmp);
-	refresh_listing(m_view + CENTER, 1);
-	free(tmp);
-
-	return;
+	if (!sem_trywait(&m_sem)) {
+		rescan_listing(m_view[CENTER].dir);
+		refresh_listing(m_view + CENTER, 1);
+	}
 }
 
 /* Just like xdg_open, check file associations and spawn a child process */
@@ -509,7 +514,8 @@ main(int argc, char *argv[])
 
 	setlocale(LC_ALL, "");                 /* Enable unicode goodness */
 	memset(&m_clip, '\0', sizeof(m_clip)); /* Initialize the yank buffer */
-	signal(SIGUSR1, update_center);
+	sem_init(&m_sem, 0, 0);                /* Initialize the update semaphore */
+	signal(SIGUSR1, queue_update);
 
 	/* Initialize ncurses */
 	initscr();                             /* Initialize ncurses sesion */
@@ -532,20 +538,26 @@ main(int argc, char *argv[])
 	/* Main control loop */
 	while ((ch = wgetch(m_view[BOT].win)) != 'q') {
 		/* Call the function associated with the key pressed */
-		if (ch == KEY_RESIZE) {
+		switch (ch) {
+		case KEY_RESIZE:
 			resize_handler();
-		}
-
-		for (i=0; keys[i].key != '\0'; i++) {
-			if (ch == keys[i].key) {
-				keys[i].funct(&keys[i].arg);
-				break;
+			break;
+		case ERR:
+			break;
+		default:
+			for (i=0; keys[i].key != '\0'; i++) {
+				if (ch == keys[i].key) {
+					keys[i].funct(&keys[i].arg);
+					break;
+				}
 			}
+			break;
 		}
-
+		update_reaper();
 	}
 
 	/* Terminate ncurses session */
+	sem_destroy(&m_sem);
 	windows_deinit(m_view);
 	clip_deinit(&m_clip);
 	endwin();

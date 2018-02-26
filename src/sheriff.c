@@ -216,7 +216,6 @@ paste_cur(const Arg *arg)
 	Direntry *dir = m_view[CENTER].dir;
 
 	clip_exec(&m_clip, dir->path);
-	clip_clear(&m_clip);
 	m_view[CENTER].visual = 0;
 
 	dialog(m_view[BOT].win, "Selection pasted", NULL);
@@ -535,7 +534,7 @@ main(int argc, char *argv[])
 
 	/* Terminate ncurses session */
 	windows_deinit(m_view);
-	clip_clear(&m_clip);
+	clip_deinit(&m_clip);
 	endwin();
 	return 0;
 }

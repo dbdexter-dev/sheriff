@@ -65,7 +65,7 @@ void
 print_status_top(WINDOW *win, char *user, char *wd, char *hostn, char *hi)
 {
 	werase(win);
-	wattrset(win, A_BOLD | COLOR_PAIR(PAIR_BLUE_DEF));
+	wattron(win, A_BOLD | COLOR_PAIR(PAIR_BLUE_DEF));
 	mvwprintw(win, 0, 0, "%s@%s", user, hostn);
 	wattron(win, COLOR_PAIR(PAIR_GREEN_DEF));
 	wprintw(win, " %s/", wd);

@@ -12,6 +12,7 @@
 #include "dir.h"
 #include "clipboard.h"
 #include "ncutils.h"
+#include "ui.h"
 #include "utils.h"
 
 #define MAIN_PERC 0.6
@@ -509,7 +510,7 @@ main(int argc, char *argv[])
 
 	getmaxyx(stdscr, max_row, max_col);
 
-	init_windows(m_view, max_row, max_col, MAIN_PERC);
+	windows_init(m_view, max_row, max_col, MAIN_PERC);
 	keypad(m_view[BOT].win, TRUE);
 
 	path = realpath(".", NULL);
@@ -533,7 +534,7 @@ main(int argc, char *argv[])
 	}
 
 	/* Terminate ncurses session */
-	deinit_windows(m_view);
+	windows_deinit(m_view);
 	clip_clear(&m_clip);
 	endwin();
 	return 0;

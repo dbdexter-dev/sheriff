@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <string.h>
@@ -7,6 +8,7 @@
 #include "clipboard.h"
 #include "dir.h"
 #include "utils.h"
+#include "ui.h"
 
 struct pthr_clip_arg {
 	Clipboard *clip;
@@ -172,6 +174,7 @@ pthr_clip_exec(void *arg)
 	}
 
 	pthread_mutex_unlock(&clip->mutex);
+	kill(0, SIGUSR1);
 	/* arg was passed on the heap to prevent it being overwritten */
 	free(arg);
 	return NULL;

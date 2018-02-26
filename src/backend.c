@@ -1,9 +1,7 @@
 #include <assert.h>
 #include <dirent.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include "backend.h"
 #include "dir.h"
 #include "utils.h"

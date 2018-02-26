@@ -2,9 +2,10 @@
 #include <dirent.h>
 #include <locale.h>
 #include <ncurses.h>
+#include <semaphore.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -29,13 +30,14 @@ typedef struct {
 	const Arg arg;
 } Key;
 
-
 static int   direct_cd(char *center_path);
 static int   enter_directory();
 static int   exit_directory();
 static void  resize_handler();
+static void  update_center();
 static void  xdg_open(Direntry *file);
 
+/* Functions that can be used in config.h */
 static void  abs_highlight(const Arg *arg);
 static void  filesearch(const Arg *arg);
 static void  multibind(const Arg *arg);
@@ -423,6 +425,19 @@ resize_handler()
 	update_status_bottom(m_view + BOT);
 }
 
+/* Update center window when notified */
+void
+update_center()
+{
+	char *tmp;
+
+	tmp = join_path(m_view[CENTER].dir->path, "");
+	update_win_with_path(m_view + CENTER, tmp);
+	refresh_listing(m_view + CENTER, 1);
+	free(tmp);
+
+	return;
+}
 
 /* Just like xdg_open, check file associations and spawn a child process */
 void
@@ -492,18 +507,16 @@ main(int argc, char *argv[])
 	char *path;
 	wchar_t ch;
 
-	/* Enable unicode goodness */
-	setlocale(LC_ALL, "");
-
-	/* Initialize the yank buffer */
-	memset(&m_clip, '\0', sizeof(m_clip));
+	setlocale(LC_ALL, "");                 /* Enable unicode goodness */
+	memset(&m_clip, '\0', sizeof(m_clip)); /* Initialize the yank buffer */
+	signal(SIGUSR1, update_center);
 
 	/* Initialize ncurses */
-	initscr();                            /* Initialize ncurses sesion */
-	noecho();                             /* Don't echo keys pressed */
-	cbreak();                             /* Quasi-raw input */
-	curs_set(0);                          /* Hide cursor */
-	use_default_colors();                 /* Enable default 16 colors */
+	initscr();                             /* Initialize ncurses sesion */
+	noecho();                              /* Don't echo keys pressed */
+	cbreak();                              /* Quasi-raw input */
+	curs_set(0);                           /* Hide cursor */
+	use_default_colors();                  /* Enable default 16 colors */
 	start_color();
 	init_colors();
 
@@ -538,4 +551,3 @@ main(int argc, char *argv[])
 	endwin();
 	return 0;
 }
-

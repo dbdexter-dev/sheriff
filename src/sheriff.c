@@ -2,9 +2,10 @@
 #include <dirent.h>
 #include <locale.h>
 #include <ncurses.h>
+#include <semaphore.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -12,9 +13,11 @@
 #include "dir.h"
 #include "clipboard.h"
 #include "ncutils.h"
+#include "ui.h"
 #include "utils.h"
 
 #define MAIN_PERC 0.6
+#define UPD_INT 0.5
 #define MAXSEARCHLEN MAXCMDLEN
 
 typedef union {
@@ -28,16 +31,18 @@ typedef struct {
 	const Arg arg;
 } Key;
 
-
 static int   direct_cd(char *center_path);
 static int   enter_directory();
 static int   exit_directory();
+static void  queue_update();
 static void  resize_handler();
+static void  update_reaper();
 static void  xdg_open(Direntry *file);
 
+/* Functions that can be used in config.h */
 static void  abs_highlight(const Arg *arg);
+static void  chain(const Arg *arg);
 static void  filesearch(const Arg *arg);
-static void  multibind(const Arg *arg);
 static void  navigate(const Arg *arg);
 static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
@@ -51,6 +56,7 @@ static void  yank_cur(const Arg *arg);
  */
 static Dirview m_view[WIN_NR];
 static Clipboard m_clip;
+static sem_t m_sem;
 
 /* Keybind handlers {{{*/
 
@@ -162,7 +168,7 @@ filesearch(const Arg *arg)
 /* Meta-keybinding function, so that you can chain multiple characters together
  * to perform a single action */
 void
-multibind(const Arg *arg)
+chain(const Arg *arg)
 {
 	wchar_t ch;
 	int i;
@@ -208,6 +214,7 @@ navigate(const Arg *arg)
 	}
 }
 
+/* Basically, execute what the clipboard says */
 void
 paste_cur(const Arg *arg)
 {
@@ -215,7 +222,6 @@ paste_cur(const Arg *arg)
 	Direntry *dir = m_view[CENTER].dir;
 
 	clip_exec(&m_clip, dir->path);
-	clip_clear(&m_clip);
 	m_view[CENTER].visual = 0;
 
 	dialog(m_view[BOT].win, "Selection pasted", NULL);
@@ -248,6 +254,7 @@ quick_cd(const Arg *arg)
 		       NULL);
 	}
 }
+
 /* Highlight a file in the center window given an offset from the currently
  * highlighted index (offset in arg->i)*/
 /* TODO visual selection not updating until you get out of it */
@@ -270,6 +277,7 @@ rel_highlight(const Arg *arg)
 	abs_highlight((Arg*)&abs_pos);
 }
 
+/* Toggle visual selection mode */
 void
 visualmode_toggle(const Arg *arg)
 {
@@ -279,6 +287,7 @@ visualmode_toggle(const Arg *arg)
 	refresh_listing(m_view + CENTER, 1);
 }
 
+/* Yank the current selection to clipboard */
 void
 yank_cur(const Arg *arg)
 {
@@ -378,6 +387,13 @@ exit_directory()
 	return status;
 }
 
+/* Signal the updater that it has something to do on the next check */
+void
+queue_update()
+{
+	sem_post(&m_sem);
+}
+
 /* Handler that takes care of resizing the subviews when a SIGWINCH is received.
  * This function is one of the reasons why there has to be a global array of
  * Dirview ptrs */
@@ -423,6 +439,17 @@ resize_handler()
 	update_status_bottom(m_view + BOT);
 }
 
+/* The core updater function, it gets called periodically and checks whether a
+ * worker has done something in the background and has requested a current
+ * directory rescan */
+void
+update_reaper()
+{
+	if (!sem_trywait(&m_sem)) {
+		rescan_listing(m_view[CENTER].dir);
+		refresh_listing(m_view + CENTER, 1);
+	}
+}
 
 /* Just like xdg_open, check file associations and spawn a child process */
 void
@@ -492,24 +519,23 @@ main(int argc, char *argv[])
 	char *path;
 	wchar_t ch;
 
-	/* Enable unicode goodness */
-	setlocale(LC_ALL, "");
-
-	/* Initialize the yank buffer */
-	memset(&m_clip, '\0', sizeof(m_clip));
+	setlocale(LC_ALL, "");                 /* Enable unicode goodness */
+	memset(&m_clip, '\0', sizeof(m_clip)); /* Initialize the yank buffer */
+	sem_init(&m_sem, 0, 0);                /* Initialize the update semaphore */
+	signal(SIGUSR1, queue_update);
 
 	/* Initialize ncurses */
-	initscr();                            /* Initialize ncurses sesion */
-	noecho();                             /* Don't echo keys pressed */
-	cbreak();                             /* Quasi-raw input */
-	curs_set(0);                          /* Hide cursor */
-	use_default_colors();                 /* Enable default 16 colors */
+	initscr();                             /* Initialize ncurses sesion */
+	noecho();                              /* Don't echo keys pressed */
+	cbreak();                              /* Quasi-raw input */
+	curs_set(0);                           /* Hide cursor */
+	use_default_colors();                  /* Enable default 16 colors */
 	start_color();
 	init_colors();
 
 	getmaxyx(stdscr, max_row, max_col);
 
-	init_windows(m_view, max_row, max_col, MAIN_PERC);
+	windows_init(m_view, max_row, max_col, MAIN_PERC);
 	keypad(m_view[BOT].win, TRUE);
 
 	path = realpath(".", NULL);
@@ -519,23 +545,28 @@ main(int argc, char *argv[])
 	/* Main control loop */
 	while ((ch = wgetch(m_view[BOT].win)) != 'q') {
 		/* Call the function associated with the key pressed */
-		if (ch == KEY_RESIZE) {
+		switch (ch) {
+		case KEY_RESIZE:
 			resize_handler();
-		}
-
-		for (i=0; keys[i].key != '\0'; i++) {
-			if (ch == keys[i].key) {
-				keys[i].funct(&keys[i].arg);
-				break;
+			break;
+		case ERR:
+			break;
+		default:
+			for (i=0; keys[i].key != '\0'; i++) {
+				if (ch == keys[i].key) {
+					keys[i].funct(&keys[i].arg);
+					break;
+				}
 			}
+			break;
 		}
-
+		update_reaper();
 	}
 
 	/* Terminate ncurses session */
-	deinit_windows(m_view);
-	clip_clear(&m_clip);
+	sem_destroy(&m_sem);
+	windows_deinit(m_view);
+	clip_deinit(&m_clip);
 	endwin();
 	return 0;
 }
-

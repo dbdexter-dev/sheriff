@@ -5,6 +5,7 @@
 #ifndef FILEOPS_H
 #define FILEOPS_H
 
+#include <pthread.h>
 #include "dir.h"
 
 enum clip_ops {
@@ -24,9 +25,10 @@ typedef struct filebuffer {
 typedef struct {
 	int op;
 	Direntry* dir;
+	pthread_mutex_t mutex;
 } Clipboard;
 
-int clip_clear(Clipboard *clip);
+int clip_deinit(Clipboard *clip);
 int clip_exec(Clipboard *clip, char *destpath);
 int clip_init(Clipboard *clip, Direntry *dir, int op);
 

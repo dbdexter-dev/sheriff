@@ -4,7 +4,6 @@
 * Enable top bar truncation a la fish
 * Allow traversing links if they link to directories
 * Add tabbed navigation
-* Asynchronous directory updates (i.e. don't lock up when copying files)
 
 # Config.h
 * Add highlighting options

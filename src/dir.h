@@ -6,10 +6,11 @@
 #ifndef DIR_H
 #define DIR_H
 
-#include <fcntl.h>
-#include <sys/stat.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <pthread.h>
 #include <time.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 
@@ -33,6 +34,7 @@ typedef struct {
 int clear_dir_selection(Direntry *direntry);
 int init_listing(Direntry **direntry, const char *path);
 int free_listing(Direntry **direntry);
+int rescan_listing(Direntry *direntry);
 int snapshot_tree_selected(Direntry **dest, Direntry *src);
 int try_select(Direntry *direntry, int idx, int mark);
 

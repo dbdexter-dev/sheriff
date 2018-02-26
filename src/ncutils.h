@@ -17,6 +17,7 @@
 #define MAXCMDLEN 128
 #define MAXDATELEN 18
 #define HUMANSIZE_LEN 6
+#define UPD_INTERVAL 250
 
 /* Convenient enum to address a specific view in main_view */
 enum windows

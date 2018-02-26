@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include "utils.h"
 
+/* Die atrociously when something bad happens */
 void
 die(char *msg)
 {
@@ -23,6 +24,7 @@ join_path(char *parent, char *child)
 	return ret;
 }
 
+/* Convert an octal mode into a ls-like string, aka "-rwxr-xr-x" */
 void
 octal_to_str(int mode, char str[])
 {
@@ -62,6 +64,7 @@ octal_to_str(int mode, char str[])
 	return;
 }
 
+/* Wrapper that dies when malloc fails */
 void*
 safealloc(size_t s)
 {

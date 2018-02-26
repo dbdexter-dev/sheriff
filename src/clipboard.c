@@ -35,13 +35,19 @@ int
 clip_exec(Clipboard *clip, char *destpath)
 {
 	struct pthr_clip_arg *arg;
+	pthread_attr_t wt_attr;
 	pthread_t thr;
 
 	arg = safealloc(sizeof(*arg));
 	arg->clip = clip;
-	arg->destpath = destpath;
+	arg->destpath = safealloc(sizeof(*arg->destpath) * (strlen(destpath) + 1));
 
-	pthread_create(&thr, NULL, pthr_clip_exec, arg);
+	sprintf(arg->destpath, "%s", destpath);
+
+	pthread_attr_init(&wt_attr);
+	pthread_attr_setdetachstate(&wt_attr, PTHREAD_CREATE_DETACHED);
+
+	pthread_create(&thr, &wt_attr, pthr_clip_exec, arg);
 
 	return 0;
 }
@@ -174,6 +180,7 @@ pthr_clip_exec(void *arg)
 	}
 
 	pthread_mutex_unlock(&clip->mutex);
+	free(destpath);
 	/* Signal the main thread that the current directory contents have changed */
 	kill(0, SIGUSR1);
 	/* arg was passed on the heap to prevent it being overwritten */

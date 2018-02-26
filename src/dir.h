@@ -6,10 +6,11 @@
 #ifndef DIR_H
 #define DIR_H
 
-#include <fcntl.h>
-#include <sys/stat.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <pthread.h>
 #include <time.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 

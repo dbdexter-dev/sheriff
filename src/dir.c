@@ -21,6 +21,7 @@ static void quicksort(Fileentry* *dir, int istart, int iend);
 static void tree_xchg(Fileentry* *tree, int a, int b);
 static int  sort_tree(Direntry *dir);
 
+/* Mark all files in a direntry tree as not selected */
 int
 clear_dir_selection(Direntry *direntry)
 {
@@ -100,6 +101,10 @@ init_listing(Direntry **direntry, const char *path)
 	return 0;
 }
 
+/* Update a directory listing without changing the directory it points to, or
+ * the highlighted file index. It does clear the current selection though, since
+ * rescan_listing is called when the directory contents have changed, and so the
+ * selected files might get pushed around */
 int
 rescan_listing(Direntry *direntry)
 {
@@ -170,7 +175,7 @@ try_select(Direntry *direntry, int idx, int mark)
 	}
 
 	if (mark) {
-		/* Mark the files from the previous position to the current one as selected */
+		/* Mark the files from the previous idx to the current idx as selected */
 		if (idx > direntry->sel_idx) {
 			for (i=direntry->sel_idx+1; i<=idx; i++) {
 				direntry->tree[i]->selected ^= 1;
@@ -297,7 +302,7 @@ populate_tree(Direntry *dir, const char *path)
 	return 0;
 }
 
-/* Implementation of the quicksort algorithm, center element is the pivot */
+/* Quicksort algorithm pass, center element is the pivot */
 int
 quicksort_pass(Fileentry* *tree, int istart, int iend)
 {
@@ -319,6 +324,7 @@ quicksort_pass(Fileentry* *tree, int istart, int iend)
 	return r;
 }
 
+/* Iterative implementation of quicksort */
 void
 quicksort(Fileentry* *tree, int istart, int iend)
 {

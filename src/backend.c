@@ -79,6 +79,7 @@ navigate_fwd(Dirview *left, Dirview *center, Dirview *right)
 	return 0;
 }
 
+/* Wrapper for rescan_listing, to keep the abstraction layer consistent */
 int
 rescan_win(Dirview *win)
 {

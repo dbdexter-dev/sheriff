@@ -16,6 +16,7 @@ dialog(WINDOW *win, char *msg, char *input)
 	mvwprintw(win, 0, 0, msg);
 
 	if (input) {
+		wtimeout(win, -1);
 		echo();
 		curs_set(1);
 
@@ -24,6 +25,7 @@ dialog(WINDOW *win, char *msg, char *input)
 
 		curs_set(0);
 		noecho();
+		wtimeout(win, UPD_INTERVAL);
 	}
 }
 
@@ -75,7 +77,7 @@ print_status_top(WINDOW *win, char *user, char *wd, char *hostn, char *hi)
 	wrefresh(win);
 }
 
-
+/* Change the highlighted line from oidx to nidx */
 void
 change_highlight(WINDOW *win, int oidx, int nidx)
 {

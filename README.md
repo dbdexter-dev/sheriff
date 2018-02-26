@@ -12,7 +12,7 @@ src/config.h header and recompiling.
 * **Keybinds**: Stored in the *keys* array. Each element has 3 fields: a key, a
   function, and, optionally, an argument to said function.  The array has to be
   terminated with an element with a 0 in every field.
-  There's a special function, *multibind*, which allows chaining multiple keys
+  There's a special function, *chain*, which allows chaining multiple keys
   together. Basically, you can pass another array of keybinds to it, and create
   multi-character bindings that way.
 * **File associations**: Stored in the *associations* array. Here you can

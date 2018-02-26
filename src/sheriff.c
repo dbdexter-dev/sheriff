@@ -214,6 +214,7 @@ navigate(const Arg *arg)
 	}
 }
 
+/* Basically, execute what the clipboard says */
 void
 paste_cur(const Arg *arg)
 {
@@ -253,6 +254,7 @@ quick_cd(const Arg *arg)
 		       NULL);
 	}
 }
+
 /* Highlight a file in the center window given an offset from the currently
  * highlighted index (offset in arg->i)*/
 /* TODO visual selection not updating until you get out of it */
@@ -275,6 +277,7 @@ rel_highlight(const Arg *arg)
 	abs_highlight((Arg*)&abs_pos);
 }
 
+/* Toggle visual selection mode */
 void
 visualmode_toggle(const Arg *arg)
 {
@@ -284,6 +287,7 @@ visualmode_toggle(const Arg *arg)
 	refresh_listing(m_view + CENTER, 1);
 }
 
+/* Yank the current selection to clipboard */
 void
 yank_cur(const Arg *arg)
 {
@@ -383,6 +387,7 @@ exit_directory()
 	return status;
 }
 
+/* Signal the updater that it has something to do on the next check */
 void
 queue_update()
 {
@@ -434,7 +439,9 @@ resize_handler()
 	update_status_bottom(m_view + BOT);
 }
 
-/* Run update when notified */
+/* The core updater function, it gets called periodically and checks whether a
+ * worker has done something in the background and has requested a current
+ * directory rescan */
 void
 update_reaper()
 {

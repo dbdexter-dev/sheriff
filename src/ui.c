@@ -201,7 +201,7 @@ windows_init(Dirview view[WIN_NR], int row, int col, float main_perc)
 	view[RIGHT].win = newwin(row - 2, sc_r, 1, sc_l + mc);
 
 	/* Check for window updates every 250 ms */
-	wtimeout(view[BOT].win, 250);
+	wtimeout(view[BOT].win, UPD_INTERVAL);
 
 	/* Initialize the view offsets */
 	for (i=0; i<WIN_NR; i++) {

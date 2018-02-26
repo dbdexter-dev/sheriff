@@ -174,6 +174,7 @@ pthr_clip_exec(void *arg)
 	}
 
 	pthread_mutex_unlock(&clip->mutex);
+	/* Signal the main thread that the current directory contents have changed */
 	kill(0, SIGUSR1);
 	/* arg was passed on the heap to prevent it being overwritten */
 	free(arg);

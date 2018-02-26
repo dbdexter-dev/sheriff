@@ -1,9 +1,7 @@
 #include <assert.h>
 #include <dirent.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include "backend.h"
 #include "dir.h"
 #include "utils.h"
@@ -78,6 +76,13 @@ navigate_fwd(Dirview *left, Dirview *center, Dirview *right)
 	update_win_with_path(right, fullpath);
 	free(fullpath);
 
+	return 0;
+}
+
+int
+rescan_win(Dirview *win)
+{
+	rescan_listing(win->dir);
 	return 0;
 }
 

@@ -2,9 +2,10 @@
 #include <dirent.h>
 #include <locale.h>
 #include <ncurses.h>
+#include <semaphore.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -16,6 +17,7 @@
 #include "utils.h"
 
 #define MAIN_PERC 0.6
+#define UPD_INT 0.5
 #define MAXSEARCHLEN MAXCMDLEN
 
 typedef union {
@@ -29,13 +31,15 @@ typedef struct {
 	const Arg arg;
 } Key;
 
-
 static int   direct_cd(char *center_path);
 static int   enter_directory();
 static int   exit_directory();
+static void  queue_update();
 static void  resize_handler();
+static void  update_reaper();
 static void  xdg_open(Direntry *file);
 
+/* Functions that can be used in config.h */
 static void  abs_highlight(const Arg *arg);
 static void  chain(const Arg *arg);
 static void  filesearch(const Arg *arg);
@@ -52,6 +56,7 @@ static void  yank_cur(const Arg *arg);
  */
 static Dirview m_view[WIN_NR];
 static Clipboard m_clip;
+static sem_t m_sem;
 
 /* Keybind handlers {{{*/
 
@@ -216,7 +221,6 @@ paste_cur(const Arg *arg)
 	Direntry *dir = m_view[CENTER].dir;
 
 	clip_exec(&m_clip, dir->path);
-	clip_clear(&m_clip);
 	m_view[CENTER].visual = 0;
 
 	dialog(m_view[BOT].win, "Selection pasted", NULL);
@@ -379,6 +383,12 @@ exit_directory()
 	return status;
 }
 
+void
+queue_update()
+{
+	sem_post(&m_sem);
+}
+
 /* Handler that takes care of resizing the subviews when a SIGWINCH is received.
  * This function is one of the reasons why there has to be a global array of
  * Dirview ptrs */
@@ -424,6 +434,15 @@ resize_handler()
 	update_status_bottom(m_view + BOT);
 }
 
+/* Run update when notified */
+void
+update_reaper()
+{
+	if (!sem_trywait(&m_sem)) {
+		rescan_listing(m_view[CENTER].dir);
+		refresh_listing(m_view + CENTER, 1);
+	}
+}
 
 /* Just like xdg_open, check file associations and spawn a child process */
 void
@@ -493,18 +512,17 @@ main(int argc, char *argv[])
 	char *path;
 	wchar_t ch;
 
-	/* Enable unicode goodness */
-	setlocale(LC_ALL, "");
-
-	/* Initialize the yank buffer */
-	memset(&m_clip, '\0', sizeof(m_clip));
+	setlocale(LC_ALL, "");                 /* Enable unicode goodness */
+	memset(&m_clip, '\0', sizeof(m_clip)); /* Initialize the yank buffer */
+	sem_init(&m_sem, 0, 0);                /* Initialize the update semaphore */
+	signal(SIGUSR1, queue_update);
 
 	/* Initialize ncurses */
-	initscr();                            /* Initialize ncurses sesion */
-	noecho();                             /* Don't echo keys pressed */
-	cbreak();                             /* Quasi-raw input */
-	curs_set(0);                          /* Hide cursor */
-	use_default_colors();                 /* Enable default 16 colors */
+	initscr();                             /* Initialize ncurses sesion */
+	noecho();                              /* Don't echo keys pressed */
+	cbreak();                              /* Quasi-raw input */
+	curs_set(0);                           /* Hide cursor */
+	use_default_colors();                  /* Enable default 16 colors */
 	start_color();
 	init_colors();
 
@@ -520,23 +538,28 @@ main(int argc, char *argv[])
 	/* Main control loop */
 	while ((ch = wgetch(m_view[BOT].win)) != 'q') {
 		/* Call the function associated with the key pressed */
-		if (ch == KEY_RESIZE) {
+		switch (ch) {
+		case KEY_RESIZE:
 			resize_handler();
-		}
-
-		for (i=0; keys[i].key != '\0'; i++) {
-			if (ch == keys[i].key) {
-				keys[i].funct(&keys[i].arg);
-				break;
+			break;
+		case ERR:
+			break;
+		default:
+			for (i=0; keys[i].key != '\0'; i++) {
+				if (ch == keys[i].key) {
+					keys[i].funct(&keys[i].arg);
+					break;
+				}
 			}
+			break;
 		}
-
+		update_reaper();
 	}
 
 	/* Terminate ncurses session */
+	sem_destroy(&m_sem);
 	windows_deinit(m_view);
-	clip_clear(&m_clip);
+	clip_deinit(&m_clip);
 	endwin();
 	return 0;
 }
-

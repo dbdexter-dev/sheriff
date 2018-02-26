@@ -1,6 +1,10 @@
+/**
+ * Functions that sit between a Dirview's WINDOW and its other members
+ */
 #ifndef UI_H
 #define UI_H
 
+#include <semaphore.h>
 #include "backend.h"
 
 int  check_offset_changed(Dirview *view);

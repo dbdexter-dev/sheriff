@@ -1,7 +1,7 @@
 SRC=$(wildcard *.c)
 OBJ=${SRC:.c=.o}
 
-LDFLAGS += -lncurses
+LDFLAGS += -lncursesw -pthread
 
 .PHONY: default clean strip
 

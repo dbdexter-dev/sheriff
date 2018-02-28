@@ -82,7 +82,7 @@ refresh_listing(Dirview *win, int show_sizes)
 		}
 		/* Chomp string so that it fits in the window */
 		if (!show_sizes || tmpfile->size < 0) {
-			if (strchomp(tmpfile->name, tmpstring, mc))
+			if (strchomp(tmpfile->name, tmpstring, mc-1))
 				die("We do not kno de wey (read: strchomp failed)");
 			wprintw(win->win, "%s\n", tmpstring);
 		} else {

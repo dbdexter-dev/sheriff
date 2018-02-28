@@ -107,12 +107,12 @@ strchomp(const char *src, char *dest, const int maxlen)
 	}
 
 	memcpy(dest, src, maxlen);
-	if (strlen(src) < maxlen) {
+	if (strlen(src) < maxlen || maxlen < 1) {
 		return 0;
 	}
 
-	dest[maxlen-2] = '~';
-	dest[maxlen-1] = '\0';
+	dest[maxlen-1] = '~';
+	dest[maxlen] = '\0';
 	return 0;
 }
 
@@ -145,6 +145,6 @@ tohuman(unsigned long bytes, char *human)
 inline int
 toupper(int c)
 {
-	return (c >= 'a' && c <= 'z') ? (c & 0xBF) : c;
+	return (c >= 'a' && c <= 'z') ? (c & 0xDF) : c;
 }
 /*}}}*/

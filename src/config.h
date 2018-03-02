@@ -60,6 +60,8 @@ static Key keys[] = {
 	{ 'G',          abs_highlight,      {.i = -1}},
 	{ 'p',          paste_cur,          {0}},
 	{ 'v',          visualmode_toggle,  {0}},
+	{ '',         new_tab,            {0}},
+	{ '\t',         rel_tabswitch,      {.i = +1}},
 /*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };

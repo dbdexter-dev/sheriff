@@ -36,6 +36,7 @@ static int   enter_directory();
 static int   exit_directory();
 static void  queue_update();
 static void  resize_handler();
+static int   tab_select(int idx);
 static void  update_reaper();
 static void  xdg_open(Direntry *file);
 
@@ -44,9 +45,11 @@ static void  abs_highlight(const Arg *arg);
 static void  chain(const Arg *arg);
 static void  filesearch(const Arg *arg);
 static void  navigate(const Arg *arg);
+static void  new_tab(const Arg *arg);
 static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
 static void  rel_highlight(const Arg *arg);
+static void  rel_tabswitch(const Arg *arg);
 static void  visualmode_toggle(const Arg *arg);
 static void  yank_cur(const Arg *arg);
 
@@ -215,6 +218,18 @@ navigate(const Arg *arg)
 	}
 }
 
+void
+new_tab(const Arg *arg)
+{
+	const char *path;
+	const Arg one = {.i = 1};
+
+	path = m_view[CENTER].ctx->dir->path;
+	tabctx_append(&m_ctx, path);
+
+	rel_tabswitch(&one);
+}
+
 /* Basically, execute what the clipboard says */
 void
 paste_cur(const Arg *arg)
@@ -267,6 +282,20 @@ rel_highlight(const Arg *arg)
 		abs_pos = 0;
 	}
 	abs_highlight((Arg*)&abs_pos);
+}
+
+void
+rel_tabswitch(const Arg *arg)
+{
+	static int cur_tab = 0;
+
+	cur_tab += arg->i;
+
+	/* If we reach the end of the tab list, go to the beginning */
+	if (tab_select(cur_tab) == -1) {
+		cur_tab = 0;
+		tab_select(cur_tab);
+	}
 }
 
 /* Toggle visual selection mode */
@@ -430,6 +459,23 @@ resize_handler()
 	update_status_bottom(m_view + BOT);
 }
 
+int
+tab_select(int idx)
+{
+	TabCtx *tmp;
+	for (tmp = m_ctx; idx > 0; idx--) {
+		/* End of tabs reached prematurely, exit */
+		if (!tmp->next) {
+			return -1;
+		}
+
+		tmp = tmp->next;
+	}
+
+	return tab_switch(m_view, tmp);
+}
+
+
 /* The core updater function, it gets called periodically and checks whether a
  * worker has done something in the background and has requested a current
  * directory rescan */
@@ -533,8 +579,7 @@ main(int argc, char *argv[])
 	tabctx_append(&m_ctx, path);
 	free(path);
 
-	tab_switch(m_view, m_ctx);
-
+	tab_select(0);
 	/* Main control loop */
 	while ((ch = wgetch(m_view[BOT].win)) != 'q') {
 		/* Call the function associated with the key pressed */

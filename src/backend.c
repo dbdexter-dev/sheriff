@@ -8,8 +8,6 @@
 #include "utils.h"
 #include "ncutils.h"
 
-static int panectx_free(PaneCtx *ctx);
-
 /* Associate a Direntry struct with a Dirview */
 int
 associate_dir(PaneCtx *ctx, Direntry *direntry)
@@ -93,6 +91,8 @@ navigate_fwd(PaneCtx *left, PaneCtx *center, PaneCtx *right)
 	return 0;
 }
 
+/* Check whether the window offset should be changed, and return 1 if the offset
+ * has changed, 0 otherwise */
 int
 recheck_offset(PaneCtx *ctx, int nr)
 {
@@ -116,54 +116,6 @@ rescan_pane(PaneCtx *ctx)
 }
 
 int
-tabctx_append(TabCtx **ctx, const char *path)
-{
-	char *tmp;
-	TabCtx *ptr;
-
-	assert(ctx);
-
-	ptr = safealloc(sizeof(**ctx));
-	ptr->next = *ctx;
-	*ctx = ptr;
-
-	ptr->left = safealloc(sizeof(*ptr->left));
-	ptr->center = safealloc(sizeof(*ptr->center));
-	ptr->right = safealloc(sizeof(*ptr->right));
-
-	memset(ptr->left, '\0', sizeof(*ptr->left));
-	memset(ptr->center, '\0', sizeof(*ptr->center));
-	memset(ptr->right, '\0', sizeof(*ptr->right));
-
-	tmp = join_path(path, "../");
-	init_pane_with_path(ptr->left, tmp);
-	free(tmp);
-	init_pane_with_path(ptr->center, path);
-	init_pane_with_path(ptr->right, path);
-
-	return 0;
-}
-
-int
-tabctx_free(TabCtx **ctx)
-{
-	TabCtx *tmp, *freeme;
-
-	for (freeme = *ctx; freeme != NULL; ) {
-		tmp = freeme->next;
-		panectx_free(freeme->left);
-		panectx_free(freeme->center);
-		panectx_free(freeme->right);
-		free(freeme);
-		freeme = tmp;
-	}
-
-	*ctx = NULL;
-	return 0;
-}
-
-/* Static functions {{{ */
-int
 panectx_free(PaneCtx *ctx)
 {
 	if (!ctx) {
@@ -174,4 +126,3 @@ panectx_free(PaneCtx *ctx)
 	free(ctx);
 	return 0;
 }
-/*}}}*/

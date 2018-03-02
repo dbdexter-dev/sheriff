@@ -13,6 +13,7 @@
 #include "dir.h"
 #include "clipboard.h"
 #include "ncutils.h"
+#include "tabctx.h"
 #include "ui.h"
 #include "utils.h"
 
@@ -50,6 +51,7 @@ static void  quick_cd(const Arg *arg);
 static void  rel_highlight(const Arg *arg);
 static void  rel_tabswitch(const Arg *arg);
 static void  tab_clone(const Arg *arg);
+static void  tab_delete(const Arg *arg);
 static void  visualmode_toggle(const Arg *arg);
 static void  yank_cur(const Arg *arg);
 
@@ -60,6 +62,7 @@ static void  yank_cur(const Arg *arg);
 static Dirview m_view[WIN_NR];
 static TabCtx *m_ctx;
 static int tabcount;
+static int cur_tab = 0;
 static Clipboard m_clip;
 static sem_t m_sem;
 
@@ -237,6 +240,26 @@ tab_clone(const Arg *arg)
 	rel_tabswitch(&zero);
 }
 
+void
+tab_delete(const Arg *arg)
+{
+	TabCtx *tmp;
+	const Arg zero = {.i = 0};
+
+	if (tabcount <= 1) {
+		ungetch('q');
+	} else {
+		tabctx_remove(&m_ctx, cur_tab);
+
+		tabcount = 0;
+		for (tmp = m_ctx; tmp != NULL; tmp = tmp->next) {
+			tabcount++;
+		}
+
+		rel_tabswitch(&zero);
+	}
+}
+
 /* Basically, execute what the clipboard says */
 void
 paste_cur(const Arg *arg)
@@ -294,7 +317,6 @@ rel_highlight(const Arg *arg)
 void
 rel_tabswitch(const Arg *arg)
 {
-	static int cur_tab = 0;
 	cur_tab = tab_select(cur_tab - arg->i);
 }
 
@@ -622,7 +644,7 @@ main(int argc, char *argv[])
 	/* Terminate ncurses session */
 	sem_destroy(&m_sem);
 	windows_deinit(m_view);
-	tabctx_free(&m_ctx);
+	tabctx_deinit(&m_ctx);
 	clip_deinit(&m_clip);
 	endwin();
 	return 0;

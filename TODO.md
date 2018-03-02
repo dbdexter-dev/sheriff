@@ -3,7 +3,6 @@
 * Reduce the number of #define directives
 * Enable top bar truncation a la fish
 * Allow traversing links if they link to directories
-* Add tabbed navigation
 
 # Config.h
 * Add highlighting options

@@ -62,6 +62,7 @@ static Key keys[] = {
 	{ 'v',          visualmode_toggle,  {0}},
 	{ '',         tab_clone,          {0}},
 	{ '\t',         rel_tabswitch,      {.i = +1}},
+	{ 'x',          tab_delete,         {0}},
 /*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };

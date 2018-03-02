@@ -5,6 +5,7 @@
 #define UI_H
 
 #include "backend.h"
+#include "tabctx.h"
 
 #define TABNAME_MAX 12
 #define MAXDATELEN 18

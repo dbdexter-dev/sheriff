@@ -55,6 +55,7 @@ static void  yank_cur(const Arg *arg);
  * keybind handlers
  */
 static Dirview m_view[WIN_NR];
+static TabCtx *m_ctx;
 static Clipboard m_clip;
 static sem_t m_sem;
 
@@ -68,7 +69,7 @@ abs_highlight(const Arg *arg)
 	char *fullpath;
 	const Direntry *dir;
 
-	dir = m_view[CENTER].dir;
+	dir = m_view[CENTER].ctx->dir;
 
 	/* Negative number means "from the bottom up" */
 	if (arg->i < 0) {
@@ -77,9 +78,9 @@ abs_highlight(const Arg *arg)
 		abs_i = arg->i;
 	}
 
-	abs_i -= m_view[CENTER].offset;
+	abs_i -= m_view[CENTER].ctx->offset;
 
-	prev_pos = dir->sel_idx - m_view[CENTER].offset;
+	prev_pos = dir->sel_idx - m_view[CENTER].ctx->offset;
 	cur_pos = try_highlight(m_view + CENTER, abs_i);
 
 	if(cur_pos == prev_pos) {
@@ -91,17 +92,17 @@ abs_highlight(const Arg *arg)
 	 * Otherwise, free it so that refresh_listing will show a blank pane */
 	if (S_ISDIR(dir->tree[dir->sel_idx]->mode)) {
 		fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
-		update_win_with_path(m_view + RIGHT, fullpath);
+		init_pane_with_path(m_view[RIGHT].ctx, fullpath);
 		free(fullpath);
 	} else {
-		update_win_with_path(m_view + RIGHT, NULL);
+		init_pane_with_path(m_view[RIGHT].ctx, NULL);
 	}
 
 	refresh_listing(m_view + RIGHT, 0);
 
 	/* If the directory view doesn't have to be changed, do a simple wrefresh;
 	 * otherwise do a full redraw */
-	if (check_offset_changed(m_view + CENTER) || m_view[CENTER].visual) {
+	if (check_offset_changed(m_view + CENTER) || m_view[CENTER].ctx->visual) {
 		refresh_listing(m_view + CENTER, 1);
 	} else {
 		wrefresh(m_view[CENTER].win);
@@ -120,7 +121,7 @@ filesearch(const Arg *arg)
 	int i, found;
 	char fname[MAXSEARCHLEN+1];
 	char *fullpath;
-	const Direntry *dir = m_view[CENTER].dir;
+	const Direntry *dir = m_view[CENTER].ctx->dir;
 
 	dialog(m_view[BOT].win, arg->i > 0 ? "/" : "?", fname);
 	if (*fname == '\0') {
@@ -132,17 +133,17 @@ filesearch(const Arg *arg)
 	 * ability to quickly redo the search */
 	found = 0;
 	if (arg->i > 0) {
-		for (i=m_view[CENTER].dir->sel_idx+1; i<dir->count; i++) {
+		for (i=m_view[CENTER].ctx->dir->sel_idx+1; i<dir->count; i++) {
 			if (strcasestr(dir->tree[i]->name, fname)) {
-				m_view[CENTER].dir->sel_idx = i;
+				m_view[CENTER].ctx->dir->sel_idx = i;
 				found = 1;
 				break;
 			}
 		}
 	} else {
-		for (i=m_view[CENTER].dir->sel_idx-1; i>=0; i--) {
+		for (i=m_view[CENTER].ctx->dir->sel_idx-1; i>=0; i--) {
 			if (strcasestr(dir->tree[i]->name, fname)) {
-				m_view[CENTER].dir->sel_idx = i;
+				m_view[CENTER].ctx->dir->sel_idx = i;
 				found = 1;
 				break;
 			}
@@ -154,10 +155,10 @@ filesearch(const Arg *arg)
 	if (found) {
 		if (S_ISDIR(dir->tree[dir->sel_idx]->mode)) {
 			fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
-			update_win_with_path(m_view + RIGHT, fullpath);
+			init_pane_with_path(m_view[RIGHT].ctx, fullpath);
 			free(fullpath);
 		} else {
-			update_win_with_path(m_view + RIGHT, NULL);
+			init_pane_with_path(m_view[RIGHT].ctx, NULL);
 		}
 		refresh_listing(m_view + RIGHT, 0);
 		refresh_listing(m_view + CENTER, 1);
@@ -195,7 +196,7 @@ chain(const Arg *arg)
 void
 navigate(const Arg *arg)
 {
-	Direntry *dir = m_view[CENTER].dir;
+	Direntry *dir = m_view[CENTER].ctx->dir;
 	if (arg->i == 0) {
 		return;
 	}
@@ -218,24 +219,15 @@ navigate(const Arg *arg)
 void
 paste_cur(const Arg *arg)
 {
-	char *tmp;
-	Direntry *dir = m_view[CENTER].dir;
+	Direntry *dir = m_view[CENTER].ctx->dir;
 
 	clip_exec(&m_clip, dir->path);
-	m_view[CENTER].visual = 0;
+	m_view[CENTER].ctx->visual = 0;
 
 	dialog(m_view[BOT].win, "Selection pasted", NULL);
 
-	/* Temporarily save the path we're in since we'll be freed during the
-	 * update_win_with_path, but we want dir->path to exist long enough for the
-	 * window to be initialized with it */
-	tmp = safealloc(sizeof(*tmp) * (strlen(dir->path) + 1));
-	strcpy(tmp, dir->path);
-	update_win_with_path(m_view + CENTER, tmp);
-	free(tmp);
-
-	associate_dir(m_view + TOP, m_view[CENTER].dir);
-	associate_dir(m_view + BOT, m_view[CENTER].dir);
+	associate_dir(m_view[TOP].ctx, m_view[CENTER].ctx->dir);
+	associate_dir(m_view[BOT].ctx, m_view[CENTER].ctx->dir);
 	refresh_listing(m_view + CENTER, 1);
 }
 
@@ -264,7 +256,7 @@ rel_highlight(const Arg *arg)
 	const Direntry *dir;
 	int abs_pos;
 
-	dir = m_view[CENTER].dir;
+	dir = m_view[CENTER].ctx->dir;
 
 	if (arg->i == 0) {
 		return;
@@ -281,9 +273,9 @@ rel_highlight(const Arg *arg)
 void
 visualmode_toggle(const Arg *arg)
 {
-	m_view[CENTER].visual ^= 1;
-	m_view[BOT].visual = m_view[CENTER].visual;
-	m_view[CENTER].dir->tree[m_view[CENTER].dir->sel_idx]->selected ^= 1;
+	m_view[CENTER].ctx->visual ^= 1;
+	m_view[BOT].ctx->visual = m_view[CENTER].ctx->visual;
+	m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected ^= 1;
 	refresh_listing(m_view + CENTER, 1);
 }
 
@@ -291,8 +283,8 @@ visualmode_toggle(const Arg *arg)
 void
 yank_cur(const Arg *arg)
 {
-	clip_init(&m_clip, m_view[CENTER].dir, (arg->i == 1 ? OP_COPY : OP_MOVE));
-	clear_dir_selection(m_view[CENTER].dir);
+	clip_init(&m_clip, m_view[CENTER].ctx->dir, (arg->i == 1 ? OP_COPY : OP_MOVE));
+	clear_dir_selection(m_view[CENTER].ctx->dir);
 
 	dialog(m_view[BOT].win, "Selection yanked", NULL);
 	refresh_listing(m_view + CENTER, 1);
@@ -313,12 +305,11 @@ direct_cd(char *path)
 
 	if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
 		fullpath = join_path(path, "../");
-		status |= update_win_with_path(m_view + LEFT, fullpath);
+		status |= init_pane_with_path(m_view[LEFT].ctx, fullpath);
 		free(fullpath);
-		status |= update_win_with_path(m_view + CENTER, path);
-		status |= update_win_with_path(m_view + RIGHT, path);
-		status |= associate_dir(m_view + BOT, m_view[CENTER].dir);
-		status |= associate_dir(m_view + TOP, m_view[CENTER].dir);
+		status |= init_pane_with_path(m_view[CENTER].ctx, path);
+		status |= init_pane_with_path(m_view[RIGHT].ctx, path);
+
 		status |= refresh_listing(m_view + LEFT, 0);
 		status |= refresh_listing(m_view + CENTER, 1);
 		status |= refresh_listing(m_view + RIGHT, 0);
@@ -341,16 +332,16 @@ enter_directory()
 	status = 0;
 	/* If type < 0, it's not even a file, but a message (e.g. "inaccessible"):
 	 * don't attempt a cd, just exit */
-	if (m_view[CENTER].dir->tree[m_view[CENTER].dir->sel_idx]->mode == 0) {
+	if (m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->mode == 0) {
 		status = 1;
 	} else {
-		if (navigate_fwd(m_view + LEFT, m_view + CENTER, m_view + RIGHT))
+		if (navigate_fwd(m_view[LEFT].ctx, m_view[CENTER].ctx, m_view[RIGHT].ctx))
 			die("Couldn't navigate_fwd");
 		/* Update the top and bottom bars to reflect the change in the center
 		 * window, then refresh the main views. The two bar-windows are updated
 		 * every time something happens anyway in the main control loop */
-		status |= associate_dir(m_view + TOP, m_view[CENTER].dir);
-		status |= associate_dir(m_view + BOT, m_view[CENTER].dir);
+		status |= associate_dir(m_view[TOP].ctx, m_view[CENTER].ctx->dir);
+		status |= associate_dir(m_view[BOT].ctx, m_view[CENTER].ctx->dir);
 		status |= refresh_listing(m_view + LEFT, 0);
 		status |= refresh_listing(m_view + CENTER, 1);
 		status |= refresh_listing(m_view + RIGHT, 0);
@@ -369,14 +360,14 @@ exit_directory()
 	int status;
 
 	status = 0;
-	if (navigate_back(m_view + LEFT, m_view + CENTER, m_view + RIGHT)) {
+	if (navigate_back(m_view[LEFT].ctx, m_view[CENTER].ctx, m_view[RIGHT].ctx)) {
 		die("Couldn't navigate_back");
 	}
 	/* As in enter_directory, update the directories associated to the top and
 	 * bottom bars, and update the views since we've changed their underlying
 	 * associations */
-	status |= associate_dir(m_view + TOP, m_view[CENTER].dir);
-	status |= associate_dir(m_view + BOT, m_view[CENTER].dir);
+	status |= associate_dir(m_view[TOP].ctx, m_view[CENTER].ctx->dir);
+	status |= associate_dir(m_view[BOT].ctx, m_view[CENTER].ctx->dir);
 	status |= refresh_listing(m_view + LEFT, 0);
 	status |= refresh_listing(m_view + CENTER, 1);
 	status |= refresh_listing(m_view + RIGHT, 0);
@@ -446,7 +437,7 @@ void
 update_reaper()
 {
 	if (!sem_trywait(&m_sem)) {
-		rescan_listing(m_view[CENTER].dir);
+		rescan_listing(m_view[CENTER].ctx->dir);
 		refresh_listing(m_view + CENTER, 1);
 	}
 }
@@ -539,8 +530,10 @@ main(int argc, char *argv[])
 	keypad(m_view[BOT].win, TRUE);
 
 	path = realpath(".", NULL);
-	assert(!direct_cd(path));
+	tabctx_append(&m_ctx, path);
 	free(path);
+
+	tab_switch(m_view, m_ctx);
 
 	/* Main control loop */
 	while ((ch = wgetch(m_view[BOT].win)) != 'q') {
@@ -566,6 +559,7 @@ main(int argc, char *argv[])
 	/* Terminate ncurses session */
 	sem_destroy(&m_sem);
 	windows_deinit(m_view);
+	tabctx_free(&m_ctx);
 	clip_deinit(&m_clip);
 	endwin();
 	return 0;

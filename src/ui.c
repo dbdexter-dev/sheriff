@@ -6,22 +6,13 @@
 #include "ui.h"
 #include "utils.h"
 
+
 /* Update window offset if needed, return 1 if we did change offset,
  * 0 otherwise */
 int
 check_offset_changed(Dirview *win)
 {
-	int nr;
-	nr = getmaxy(win->win);
-
-	if (win->dir->sel_idx - win->offset >= nr) {
-		win->offset = (win->dir->sel_idx - nr + 1);
-		return 1;
-	} else if (win->dir->sel_idx - win->offset < 0) {
-		win->offset = win->dir->sel_idx;
-		return 1;
-	}
-	return 0;
+	return recheck_offset(win->ctx, getmaxy(win->win));
 }
 
 /* Render a directory listing on a window. If the directoly listing is NULL,
@@ -32,17 +23,19 @@ refresh_listing(Dirview *win, int show_sizes)
 	int mr, mc, i;
 	char *tmpstring;
 	char humansize[HUMANSIZE_LEN+1];
+	PaneCtx *ctx;
 	Fileentry* tmpfile;
 
+	ctx = win->ctx;
 	assert(win->win);
 
-	if (!win->dir || !win->dir->path) {
+	if (!win->ctx->dir || !win->ctx->dir->path) {
 		werase(win->win);
 		wrefresh(win->win);
 		return 1;
 	}
 
-	assert(win->dir->tree);
+	assert(win->ctx->dir->tree);
 
 	getmaxyx(win->win, mr, mc);
 
@@ -57,8 +50,8 @@ refresh_listing(Dirview *win, int show_sizes)
 	check_offset_changed(win);
 
 	/* Read up to $mr entries */
-	for (i = win->offset; i < win->dir->count && (i - win->offset) < mr; i++) {
-		tmpfile = win->dir->tree[i];
+	for (i = ctx->offset; i < ctx->dir->count && (i - ctx->offset) < mr; i++) {
+		tmpfile = ctx->dir->tree[i];
 
 		if (tmpfile->selected) {
 			wattrset(win->win, COLOR_PAIR(PAIR_YELLOW_DEF) | A_BOLD);
@@ -97,17 +90,45 @@ refresh_listing(Dirview *win, int show_sizes)
 			strchomp(tmpfile->name, tmpstring, mc - HUMANSIZE_LEN - 1);
 
 			wprintw(win->win, "%s", tmpstring);
-			mvwprintw(win->win, i - win->offset, mc - HUMANSIZE_LEN - 1,
+			mvwprintw(win->win, i - ctx->offset, mc - HUMANSIZE_LEN - 1,
 			          "%6s\n", humansize);
 		}
 		/* Higlight the element marked as selected in the dir tree */
-		if (i == win->dir->sel_idx) {
-			try_highlight(win, i - win->offset);
+		if (i == ctx->dir->sel_idx) {
+			try_highlight(win, i - ctx->offset);
 		}
 	}
 
 	free(tmpstring);
 	wrefresh(win->win);
+	return 0;
+}
+
+/* Switch tab context and refresh the views */
+int
+tab_switch(Dirview view[WIN_NR], const TabCtx *ctx)
+{
+	assert(view && ctx);
+
+	view[LEFT].ctx = ctx->left;
+	view[CENTER].ctx = ctx->center;
+	view[RIGHT].ctx = ctx->right;
+
+	view[TOP].ctx = ctx->center;
+	view[BOT].ctx = ctx->center;
+
+	/* Rescan the directories for possible background changes */
+	rescan_pane(ctx->left);
+	rescan_pane(ctx->center);
+	rescan_pane(ctx->right);
+
+	refresh_listing(view+LEFT, 0);
+	refresh_listing(view+CENTER, 1);
+	refresh_listing(view+RIGHT, 0);
+
+	update_status_top(view+TOP);
+	update_status_bottom(view+BOT);
+
 	return 0;
 }
 
@@ -117,12 +138,15 @@ int
 try_highlight(Dirview *win, int idx)
 {
 	int row_nr;
+	PaneCtx *ctx;
+
+	ctx = win->ctx;
 
 	assert(win);
 
-	row_nr = win->dir->sel_idx - win->offset;
+	row_nr = ctx->dir->sel_idx - ctx->offset;
 	/* Update the dir backend */
-	idx = try_select(win->dir, idx + win->offset, win->visual) - win->offset;
+	idx = try_select(ctx->dir, idx + ctx->offset, ctx->visual) - ctx->offset;
 	/* Update the ncurses frontend */
 	change_highlight(win->win, row_nr, idx);
 	return idx;
@@ -136,7 +160,7 @@ update_status_bottom(Dirview *win)
 	struct tm *mtime;
 	const Fileentry *sel;
 
-	sel = win->dir->tree[win->dir->sel_idx];
+	sel = win->ctx->dir->tree[win->ctx->dir->sel_idx];
 
 	mtime = localtime(&sel->lastchange);
 	strftime(last_mod, MAXDATELEN, "%F %R", mtime);
@@ -150,9 +174,9 @@ update_status_top(Dirview *win)
 	char hostn[MAXHOSTNLEN+1];
 
 	user = getenv("USER");
-	wd = win->dir->path;
+	wd = win->ctx->dir->path;
 	gethostname(hostn, MAXHOSTNLEN);
-	hi = win->dir->tree[win->dir->sel_idx]->name;
+	hi = win->ctx->dir->tree[win->ctx->dir->sel_idx]->name;
 
 	assert(user && wd && win->win);
 	print_status_top(win->win, user, wd, hostn, hi);
@@ -170,9 +194,6 @@ windows_deinit(Dirview view[WIN_NR])
 	/* Deallocate directory listings. Top and bottom windows
 	 * inherit the CENTER path, so there's no need to free those two */
 	for (i=0; i<WIN_NR; i++) {
-		if (view[i].dir && i != TOP && i != BOT) {
-			assert(!free_listing(&view[i].dir));
-		}
 		delwin(view[i].win);
 	}
 
@@ -183,7 +204,7 @@ windows_deinit(Dirview view[WIN_NR])
 int
 windows_init(Dirview view[WIN_NR], int row, int col, float main_perc)
 {
-	int i, mc, sc_l, sc_r;
+	int mc, sc_l, sc_r;
 
 	if (!view) {
 		return -1;
@@ -202,12 +223,5 @@ windows_init(Dirview view[WIN_NR], int row, int col, float main_perc)
 
 	/* Check for window updates every 250 ms */
 	wtimeout(view[BOT].win, UPD_INTERVAL);
-
-	/* Initialize the view offsets */
-	for (i=0; i<WIN_NR; i++) {
-		view[i].offset = 0;
-	}
-
 	return 0;
 }
-

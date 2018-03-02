@@ -34,6 +34,5 @@ void dialog(WINDOW *win, char *msg, char *buf);
 void init_colors();
 void print_status_bottom(WINDOW *win, mode_t mode, struct tm *mt, int uid, int gid);
 void print_status_top(WINDOW *win, char *user, char *wd, char *hostn, char *hi);
-int  refresh_listing(Dirview *win, int show_sizes);
 
 #endif

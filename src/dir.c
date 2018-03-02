@@ -108,9 +108,11 @@ init_listing(Direntry **direntry, const char *path)
 int
 rescan_listing(Direntry *direntry)
 {
-	populate_tree(direntry, direntry->path);
-	sort_tree(direntry);
-	clear_dir_selection(direntry);
+	if (direntry->path) {
+		populate_tree(direntry, direntry->path);
+		sort_tree(direntry);
+		clear_dir_selection(direntry);
+	}
 	return 0;
 }
 
@@ -204,8 +206,6 @@ populate_tree(Direntry *dir, const char *path)
 	struct stat st;
 	int i, entries;
 	char *tmp;
-
-	assert(path);
 
 	/* Calculate how many elements we need to allocate */
 	entries = 0;

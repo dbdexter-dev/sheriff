@@ -15,10 +15,7 @@
 #define PAIR_RED_DEF 6
 
 #define MAXCMDLEN 128
-#define MAXDATELEN 18
-#define HUMANSIZE_LEN 6
 #define UPD_INTERVAL 250
-#define TABNAME_MAX 12
 
 /* Convenient enum to address a specific view in main_view */
 enum windows

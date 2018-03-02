@@ -6,6 +6,10 @@
 
 #include "backend.h"
 
+#define TABNAME_MAX 12
+#define MAXDATELEN 18
+#define HUMANSIZE_LEN 6
+
 typedef struct {
 	WINDOW *win;
 	PaneCtx *ctx;

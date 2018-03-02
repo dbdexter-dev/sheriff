@@ -123,17 +123,16 @@ tabctx_append(TabCtx **ctx, const char *path)
 
 	assert(ctx);
 
+	ptr = safealloc(sizeof(**ctx));
 	if (!(*ctx)) {
 		/* List is empty */
-		*ctx = safealloc(sizeof(**ctx));
-		ptr = *ctx;
+		ptr->next = NULL;
 	} else {
 		/* List has something in it already */
-		for (ptr = *ctx; ptr->next != NULL; ptr = ptr->next)
-			;
-		ptr->next = safealloc(sizeof(*ptr->next));
-		ptr = ptr->next;
+		ptr->next = *ctx;
 	}
+
+	*ctx = ptr;
 
 	ptr->left = safealloc(sizeof(*ptr->left));
 	ptr->center = safealloc(sizeof(*ptr->center));
@@ -142,8 +141,6 @@ tabctx_append(TabCtx **ctx, const char *path)
 	memset(ptr->left, '\0', sizeof(*ptr->left));
 	memset(ptr->center, '\0', sizeof(*ptr->center));
 	memset(ptr->right, '\0', sizeof(*ptr->right));
-
-	ptr->next = NULL;
 
 	tmp = join_path(path, "../");
 	init_pane_with_path(ptr->left, tmp);

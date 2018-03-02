@@ -203,6 +203,7 @@ update_status_top(Dirview *win, const TabCtx *tabs)
 	wprintw(win->win, " %s/", wd);
 	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
 	wprintw(win->win, "%s", hi);
+	wattrset(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
 	for (; tabs != NULL; tabs = tabs->next) {
 		if (tabs->center == win->ctx) {
 			wattron(win->win, A_REVERSE);

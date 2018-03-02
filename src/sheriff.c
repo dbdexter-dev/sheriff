@@ -303,7 +303,6 @@ void
 visualmode_toggle(const Arg *arg)
 {
 	m_view[CENTER].ctx->visual ^= 1;
-	m_view[BOT].ctx->visual = m_view[CENTER].ctx->visual;
 	m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected ^= 1;
 	refresh_listing(m_view + CENTER, 1);
 }
@@ -314,6 +313,7 @@ yank_cur(const Arg *arg)
 {
 	clip_init(&m_clip, m_view[CENTER].ctx->dir, (arg->i == 1 ? OP_COPY : OP_MOVE));
 	clear_dir_selection(m_view[CENTER].ctx->dir);
+	m_view[CENTER].ctx->visual = 0;
 
 	dialog(m_view[BOT].win, "Selection yanked", NULL);
 	refresh_listing(m_view + CENTER, 1);

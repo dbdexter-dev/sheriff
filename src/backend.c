@@ -1,11 +1,14 @@
 #include <assert.h>
 #include <dirent.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include "backend.h"
 #include "dir.h"
 #include "utils.h"
 #include "ncutils.h"
+
+static int panectx_free(PaneCtx *ctx);
 
 /* Associate a Direntry struct with a Dirview */
 int
@@ -135,6 +138,11 @@ tabctx_append(TabCtx **ctx, const char *path)
 	ptr->left = safealloc(sizeof(*ptr->left));
 	ptr->center = safealloc(sizeof(*ptr->center));
 	ptr->right = safealloc(sizeof(*ptr->right));
+
+	memset(ptr->left, '\0', sizeof(*ptr->left));
+	memset(ptr->center, '\0', sizeof(*ptr->center));
+	memset(ptr->right, '\0', sizeof(*ptr->right));
+
 	ptr->next = NULL;
 
 	tmp = join_path(path, "../");
@@ -153,9 +161,9 @@ tabctx_free(TabCtx **ctx)
 
 	for (freeme = *ctx; freeme != NULL; ) {
 		tmp = freeme->next;
-		free(freeme->left);
-		free(freeme->center);
-		free(freeme->right);
+		panectx_free(freeme->left);
+		panectx_free(freeme->center);
+		panectx_free(freeme->right);
 		free(freeme);
 		freeme = tmp;
 	}
@@ -164,3 +172,17 @@ tabctx_free(TabCtx **ctx)
 	return 0;
 }
 
+
+/* Static functions {{{ */
+int
+panectx_free(PaneCtx *ctx)
+{
+	if (!ctx) {
+		return 0;
+	}
+
+	free_listing(&ctx->dir);
+	free(ctx);
+	return 0;
+}
+/*}}}*/

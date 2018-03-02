@@ -111,7 +111,7 @@ abs_highlight(const Arg *arg)
 		wrefresh(m_view[CENTER].win);
 	}
 
-	update_status_top(m_view + TOP);
+	update_status_top(m_view + TOP, m_ctx);
 	update_status_bottom(m_view + BOT);
 
 	return;
@@ -343,7 +343,7 @@ direct_cd(char *path)
 		status |= refresh_listing(m_view + CENTER, 1);
 		status |= refresh_listing(m_view + RIGHT, 0);
 
-		update_status_top(m_view + TOP);
+		update_status_top(m_view + TOP, m_ctx);
 		update_status_bottom(m_view + BOT);
 	} else {
 		status = 1;
@@ -375,7 +375,7 @@ enter_directory()
 		status |= refresh_listing(m_view + CENTER, 1);
 		status |= refresh_listing(m_view + RIGHT, 0);
 
-		update_status_top(m_view + TOP);
+		update_status_top(m_view + TOP, m_ctx);
 		update_status_bottom(m_view + BOT);
 	}
 	return status;
@@ -401,7 +401,7 @@ exit_directory()
 	status |= refresh_listing(m_view + CENTER, 1);
 	status |= refresh_listing(m_view + RIGHT, 0);
 
-	update_status_top(m_view + TOP);
+	update_status_top(m_view + TOP, m_ctx);
 	update_status_bottom(m_view + BOT);
 
 	return status;
@@ -452,7 +452,7 @@ resize_handler()
 	wresize(m_view[RIGHT].win, nr - 2, sc_r - 1);
 	mvwin(m_view[RIGHT].win, 1, sc_l + mc);
 
-	update_status_top(m_view + TOP);
+	update_status_top(m_view + TOP, m_ctx);
 	refresh_listing(m_view + LEFT, 0);
 	refresh_listing(m_view + CENTER, 1);
 	refresh_listing(m_view + RIGHT, 0);
@@ -472,7 +472,7 @@ tab_select(int idx)
 		tmp = tmp->next;
 	}
 
-	return tab_switch(m_view, tmp);
+	return tab_switch(m_view, tmp, m_ctx);
 }
 
 

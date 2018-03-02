@@ -41,42 +41,6 @@ init_colors(void)
 	init_pair(PAIR_WHITE_DEF, COLOR_WHITE, -1);
 }
 
-/* Update the bottom status bar. Format: <permissions>  <uid>  <gid>  <last
- * modified> */
-void
-print_status_bottom(WINDOW *win, mode_t raw_m, struct tm *mtime, int uid, int gid)
-{
-	char mode[10+1];                /* Something like -rwxr-xr-x */
-	char last_modified[MAXDATELEN+1];
-
-	octal_to_str(raw_m, mode);
-	strftime(last_modified, MAXDATELEN, "%F %R", mtime);
-
-	assert(win);
-	werase(win);
-	wattrset(win, COLOR_PAIR(PAIR_GREEN_DEF));
-	mvwprintw(win, 0, 0, "%s ", mode);
-	wattrset(win, COLOR_PAIR(PAIR_WHITE_DEF));
-	wprintw(win," %d  %d  %s", uid, gid, last_modified);
-
-	wrefresh(win);
-}
-
-/* Updates the top status bar. Format: <user>@<host> $PWD/<highlighted entry> */
-void
-print_status_top(WINDOW *win, char *user, char *wd, char *hostn, char *hi)
-{
-	werase(win);
-	wattron(win, A_BOLD | COLOR_PAIR(PAIR_BLUE_DEF));
-	mvwprintw(win, 0, 0, "%s@%s", user, hostn);
-	wattron(win, COLOR_PAIR(PAIR_GREEN_DEF));
-	wprintw(win, " %s/", wd);
-	wattron(win, COLOR_PAIR(PAIR_WHITE_DEF));
-	wprintw(win, "%s", hi);
-
-	wrefresh(win);
-}
-
 /* Change the highlighted line from oidx to nidx */
 void
 change_highlight(WINDOW *win, int oidx, int nidx)

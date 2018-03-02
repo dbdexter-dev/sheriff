@@ -18,6 +18,7 @@
 #define MAXDATELEN 18
 #define HUMANSIZE_LEN 6
 #define UPD_INTERVAL 250
+#define TABNAME_MAX 12
 
 /* Convenient enum to address a specific view in main_view */
 enum windows
@@ -32,7 +33,5 @@ enum windows
 void change_highlight(WINDOW* win, int old_idx, int new_idx);
 void dialog(WINDOW *win, char *msg, char *buf);
 void init_colors();
-void print_status_bottom(WINDOW *win, mode_t mode, struct tm *mt, int uid, int gid);
-void print_status_top(WINDOW *win, char *user, char *wd, char *hostn, char *hi);
 
 #endif

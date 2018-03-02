@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include "backend.h"
 #include "ncutils.h"
@@ -106,7 +107,7 @@ refresh_listing(Dirview *win, int show_sizes)
 
 /* Switch tab context and refresh the views */
 int
-tab_switch(Dirview view[WIN_NR], const TabCtx *ctx)
+tab_switch(Dirview view[WIN_NR], const TabCtx *ctx, const TabCtx *head)
 {
 	assert(view && ctx);
 
@@ -126,7 +127,7 @@ tab_switch(Dirview view[WIN_NR], const TabCtx *ctx)
 	refresh_listing(view+CENTER, 1);
 	refresh_listing(view+RIGHT, 0);
 
-	update_status_top(view+TOP);
+	update_status_top(view+TOP, head);
 	update_status_bottom(view+BOT);
 
 	return 0;
@@ -157,6 +158,7 @@ void
 update_status_bottom(Dirview *win)
 {
 	char last_mod[MAXDATELEN+1];
+	char mode[10+1];
 	struct tm *mtime;
 	const Fileentry *sel;
 
@@ -164,22 +166,62 @@ update_status_bottom(Dirview *win)
 
 	mtime = localtime(&sel->lastchange);
 	strftime(last_mod, MAXDATELEN, "%F %R", mtime);
-	print_status_bottom(win->win, sel->mode, mtime, sel->uid, sel->gid);
+	octal_to_str(sel->mode, mode);
+
+	werase(win->win);
+	wattrset(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
+	mvwprintw(win->win, 0, 0, "%s ", mode);
+	wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
+	wprintw(win->win," %d  %d  %s", sel->uid, sel->gid, last_mod);
+
+	wrefresh(win->win);
 }
 
 void
-update_status_top(Dirview *win)
+update_status_top(Dirview *win, const TabCtx *tabs)
 {
-	char *user, *wd, *hi;
+	char *user, *wd, *hi, *tab_fullname;
 	char hostn[MAXHOSTNLEN+1];
+	char tabname[TABNAME_MAX+1];
+	int cur_off;
 
 	user = getenv("USER");
+	cur_off = getmaxx(win->win) - 1;
 	wd = win->ctx->dir->path;
 	gethostname(hostn, MAXHOSTNLEN);
 	hi = win->ctx->dir->tree[win->ctx->dir->sel_idx]->name;
 
 	assert(user && wd && win->win);
-	print_status_top(win->win, user, wd, hostn, hi);
+
+	werase(win->win);
+
+	/* For some reason I can't wattrset the color along with A_BOLD :/ */
+	wattrset(win->win, A_BOLD);
+	wattron(win->win, COLOR_PAIR(PAIR_BLUE_DEF));
+	mvwprintw(win->win, 0, 0, "%s@%s", user, hostn);
+	wattron(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
+	wprintw(win->win, " %s/", wd);
+	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
+	wprintw(win->win, "%s", hi);
+	for (; tabs != NULL; tabs = tabs->next) {
+		if (tabs->center == win->ctx) {
+			wattron(win->win, A_REVERSE);
+		} else {
+			wattroff(win->win, A_REVERSE);
+		}
+		tab_fullname = tabs->center->dir->path + strlen(tabs->center->dir->path) - 1;
+		/* TODO this is not that safe since we might go past the beginning of
+		 * the string */
+		for (; *tab_fullname != '/'; tab_fullname--)
+			;
+		tab_fullname++;
+
+		strchomp(tab_fullname, tabname, TABNAME_MAX);
+		cur_off -= strlen(tabname) + 1;
+		mvwprintw(win->win, 0, cur_off, "%s", tabname);
+	}
+
+	wrefresh(win->win);
 	return;
 }
 

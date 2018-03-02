@@ -124,14 +124,7 @@ tabctx_append(TabCtx **ctx, const char *path)
 	assert(ctx);
 
 	ptr = safealloc(sizeof(**ctx));
-	if (!(*ctx)) {
-		/* List is empty */
-		ptr->next = NULL;
-	} else {
-		/* List has something in it already */
-		ptr->next = *ctx;
-	}
-
+	ptr->next = *ctx;
 	*ctx = ptr;
 
 	ptr->left = safealloc(sizeof(*ptr->left));
@@ -168,7 +161,6 @@ tabctx_free(TabCtx **ctx)
 	*ctx = NULL;
 	return 0;
 }
-
 
 /* Static functions {{{ */
 int

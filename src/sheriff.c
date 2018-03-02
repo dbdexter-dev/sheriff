@@ -45,11 +45,11 @@ static void  abs_highlight(const Arg *arg);
 static void  chain(const Arg *arg);
 static void  filesearch(const Arg *arg);
 static void  navigate(const Arg *arg);
-static void  new_tab(const Arg *arg);
 static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
 static void  rel_highlight(const Arg *arg);
 static void  rel_tabswitch(const Arg *arg);
+static void  tab_clone(const Arg *arg);
 static void  visualmode_toggle(const Arg *arg);
 static void  yank_cur(const Arg *arg);
 
@@ -59,6 +59,7 @@ static void  yank_cur(const Arg *arg);
  */
 static Dirview m_view[WIN_NR];
 static TabCtx *m_ctx;
+static int tabcount;
 static Clipboard m_clip;
 static sem_t m_sem;
 
@@ -219,15 +220,21 @@ navigate(const Arg *arg)
 }
 
 void
-new_tab(const Arg *arg)
+tab_clone(const Arg *arg)
 {
 	const char *path;
-	const Arg one = {.i = 1};
+	const Arg zero = {.i = 0};
+	TabCtx *tmp;
 
 	path = m_view[CENTER].ctx->dir->path;
 	tabctx_append(&m_ctx, path);
 
-	rel_tabswitch(&one);
+	tabcount = 0;
+	for (tmp = m_ctx; tmp != NULL; tmp = tmp->next) {
+		tabcount++;
+	}
+
+	rel_tabswitch(&zero);
 }
 
 /* Basically, execute what the clipboard says */
@@ -288,14 +295,7 @@ void
 rel_tabswitch(const Arg *arg)
 {
 	static int cur_tab = 0;
-
-	cur_tab += arg->i;
-
-	/* If we reach the end of the tab list, go to the beginning */
-	if (tab_select(cur_tab) == -1) {
-		cur_tab = 0;
-		tab_select(cur_tab);
-	}
+	cur_tab = tab_select(cur_tab - arg->i);
 }
 
 /* Toggle visual selection mode */
@@ -459,20 +459,38 @@ resize_handler()
 	update_status_bottom(m_view + BOT);
 }
 
+/* Switch to the idxth tab */
 int
 tab_select(int idx)
 {
+	int tabidx;
 	TabCtx *tmp;
-	for (tmp = m_ctx; idx > 0; idx--) {
-		/* End of tabs reached prematurely, exit */
-		if (!tmp->next) {
-			return -1;
-		}
 
-		tmp = tmp->next;
+	/* This is so ugly, I'm sorry :c */
+	if (tabcount) {
+		idx = idx % tabcount;
+	} else {
+		idx = 0;
 	}
 
-	return tab_switch(m_view, tmp, m_ctx);
+	if (idx < 0) {
+		idx += tabcount;
+	}
+
+	tabidx=0;
+	for (tmp = m_ctx; idx > 0; idx--) {
+		tmp = tmp->next;
+		if (!tmp) {
+			tabidx = 0;
+			tmp = m_ctx;
+		} else {
+			tabidx++;
+		}
+	}
+
+	tab_switch(m_view, tmp, m_ctx);
+
+	return tabidx;
 }
 
 

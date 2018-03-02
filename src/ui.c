@@ -183,10 +183,10 @@ update_status_top(Dirview *win, const TabCtx *tabs)
 	char *user, *wd, *hi, *tab_fullname;
 	char hostn[MAXHOSTNLEN+1];
 	char tabname[TABNAME_MAX+1];
-	int cur_off;
+	int cur_off, i;
 
 	user = getenv("USER");
-	cur_off = getmaxx(win->win) - 1;
+	cur_off = getmaxx(win->win);
 	wd = win->ctx->dir->path;
 	gethostname(hostn, MAXHOSTNLEN);
 	hi = win->ctx->dir->tree[win->ctx->dir->sel_idx]->name;
@@ -203,6 +203,7 @@ update_status_top(Dirview *win, const TabCtx *tabs)
 	wprintw(win->win, " %s/", wd);
 	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
 	wprintw(win->win, "%s", hi);
+
 	wattrset(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
 	for (; tabs != NULL; tabs = tabs->next) {
 		if (tabs->center == win->ctx) {
@@ -210,16 +211,17 @@ update_status_top(Dirview *win, const TabCtx *tabs)
 		} else {
 			wattroff(win->win, A_REVERSE);
 		}
-		tab_fullname = tabs->center->dir->path + strlen(tabs->center->dir->path) - 1;
-		/* TODO this is not that safe since we might go past the beginning of
-		 * the string */
-		for (; *tab_fullname != '/'; tab_fullname--)
+		tab_fullname = tabs->center->dir->path;
+		for (i=0; tab_fullname[i] != '\0'; i++)
 			;
-		tab_fullname++;
-
-		strchomp(tab_fullname, tabname, TABNAME_MAX);
-		cur_off -= strlen(tabname) + 1;
-		mvwprintw(win->win, 0, cur_off, "%s", tabname);
+		for (; tab_fullname[i] != '/' && i>=0; i--)
+			;
+		i++;
+		if (i>0) {
+			strchomp(tab_fullname+i, tabname, TABNAME_MAX);
+			cur_off -= strlen(tabname) + 1;
+			mvwprintw(win->win, 0, cur_off, "%s", tabname);
+		}
 	}
 
 	wrefresh(win->win);

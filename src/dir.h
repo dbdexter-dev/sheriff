@@ -8,11 +8,11 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <linux/limits.h>
 #include <pthread.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-
 
 typedef struct {
 	char name[NAME_MAX+1];  /* NAME_MAX defined in dirent.h */

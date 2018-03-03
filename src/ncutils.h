@@ -28,7 +28,7 @@ enum windows
 };
 
 void change_highlight(WINDOW* win, int old_idx, int new_idx);
-void dialog(WINDOW *win, char *msg, char *buf);
+void dialog(WINDOW *win, char *buf, const char *msg, ...);
 void init_colors();
 
 #endif

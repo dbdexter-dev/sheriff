@@ -5,6 +5,8 @@
 #include <sys/stat.h>
 #include "utils.h"
 
+
+static int toupper(int c);
 /* Die atrociously when something bad happens */
 void
 die(const char *msg)
@@ -71,10 +73,29 @@ safealloc(size_t s)
 	void *ret;
 
 	ret = malloc(s);
-	if (!ret) {
-		die("Malloc failed");
-	}
+	assert(ret);
 	return ret;
+}
+
+/* Compare two strings case-insensitively */
+char *
+strcasestr(const char *haystack, const char *needle)
+{
+	int i;
+
+	for (i = 0; haystack[i] != '\0'; ) {
+		if (toupper(haystack[i]) == toupper(needle[i])) {
+			i++;
+			if (needle[i] == '\0') {
+				return (char*)haystack;
+			}
+		} else {
+			i = 0;
+			haystack++;
+		}
+	}
+
+	return NULL;
 }
 
 /* Truncate a string to length, adding "~" to the end if needed */
@@ -119,3 +140,11 @@ tohuman(unsigned long bytes, char *human)
 		}
 	}
 }
+
+/* Static functions {{{*/
+inline int
+toupper(int c)
+{
+	return (c >= 'a' && c <= 'z') ? (c & 0xBF) : c;
+}
+/*}}}*/

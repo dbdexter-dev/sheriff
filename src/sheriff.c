@@ -86,15 +86,19 @@ abs_highlight(const Arg *arg)
 		abs_i = arg->i;
 	}
 
+	if (abs_i < 0) {
+		return;
+	}
+
 	abs_i -= m_view[CENTER].ctx->offset;
 
 	prev_pos = dir->sel_idx - m_view[CENTER].ctx->offset;
 	cur_pos = try_highlight(m_view + CENTER, abs_i);
 
-	if(cur_pos == prev_pos) {
+	/* Current and previous positions are the same, we got nothing more to do */
+	if (cur_pos == prev_pos) {
 		return;
 	}
-
 
 	/* If the selected element is a directory, update the right pane
 	 * Otherwise, free it so that refresh_listing will show a blank pane */
@@ -131,7 +135,7 @@ filesearch(const Arg *arg)
 	char *fullpath;
 	const Direntry *dir = m_view[CENTER].ctx->dir;
 
-	dialog(m_view[BOT].win, arg->i > 0 ? "/" : "?", fname);
+	dialog(m_view[BOT].win, fname, arg->i > 0 ? "/" : "?");
 	if (*fname == '\0') {
 		return;
 	}
@@ -273,7 +277,7 @@ paste_cur(const Arg *arg)
 	clip_exec(&m_clip, dir->path);
 	m_view[CENTER].ctx->visual = 0;
 
-	dialog(m_view[BOT].win, "Selection pasted", NULL);
+	dialog(m_view[BOT].win, NULL, "Selection pasted");
 
 	refresh_listing(m_view + CENTER, 1);
 }
@@ -284,13 +288,13 @@ quick_cd(const Arg *arg)
 {
 	char path[256];
 
-	dialog(m_view[BOT].win, "cd: ", path);
+	dialog(m_view[BOT].win, path, "cd: ");
 	if (*path == '\0') {
 		return;
 	} if (direct_cd(path)) {
 		dialog(m_view[BOT].win,
-		       "Destination is not a valid directory",
-		       NULL);
+		       NULL,
+		       "Destination is not a valid directory");
 	}
 }
 
@@ -335,7 +339,7 @@ rename_cur(const Arg *arg)
 	clip_init(&m_clip, m_view[CENTER].ctx->dir, OP_MOVE);
 	m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected = 0;
 
-	dialog(m_view[BOT].win, "rename: ", dest);
+	dialog(m_view[BOT].win, dest, "rename: ");
 
 	if (dest[0] != '\0') {
 		realdest = join_path(m_view[CENTER].ctx->dir->path, dest);
@@ -361,7 +365,7 @@ yank_cur(const Arg *arg)
 	clear_dir_selection(m_view[CENTER].ctx->dir);
 	m_view[CENTER].ctx->visual = 0;
 
-	dialog(m_view[BOT].win, "Selection yanked", NULL);
+	dialog(m_view[BOT].win, NULL, "Selection yanked");
 	refresh_listing(m_view + CENTER, 1);
 }
 /*}}}*/
@@ -511,11 +515,7 @@ tab_select(int idx)
 	TabCtx *tmp;
 
 	/* This is so ugly, I'm sorry :c */
-	if (tabcount) {
-		idx = idx % tabcount;
-	} else {
-		idx = 0;
-	}
+	idx = (tabcount ? (idx % tabcount) : 0);
 
 	/* Account for negative indexes */
 	if (idx < 0) {
@@ -578,7 +578,7 @@ xdg_open(Direntry *dir)
 
 	/* Ask the user for a command to open the file with */
 	if (!associated) {
-		dialog(m_view[BOT].win,  "open_with: ", cmd);
+		dialog(m_view[BOT].win, cmd, "open_with: ");
 	}
 
 	/* Leave curses mode */
@@ -599,7 +599,8 @@ xdg_open(Direntry *dir)
 	/* Restore curses mode */
 	reset_prog_mode();
 	if (WEXITSTATUS(wstatus)) {
-		dialog(m_view[BOT].win, "Warning: subprocess exited with non-zero status", NULL);
+		dialog(m_view[BOT].win, NULL,
+		       "Subprocess exited with status %d", WEXITSTATUS(wstatus));
 	}
 	for (i=0; i<WIN_NR; i++) {
 		wrefresh(m_view[i].win);

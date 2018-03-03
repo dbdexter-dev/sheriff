@@ -1,4 +1,4 @@
-export CFLAGS =-pipe -Wall -std=c99 -pedantic -D _GNU_SOURCE -D _XOPEN_SOURCE_EXTENDED
+export CFLAGS =-pipe -Wall -std=c99 -pedantic -D _XOPEN_SOURCE=700
 export LDFLAGS =
 PREFIX = /usr
 

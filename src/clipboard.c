@@ -119,7 +119,7 @@ move_file(char *dest, char *src, int preserve_src)
 	}
 
 	if (!(pid = fork())) {
-		if(preserve_src) {
+		if (preserve_src) {
 			execlp("/bin/cp", "/bin/cp", "-rn",  src, dest, NULL);
 		} else {
 			execlp("/bin/mv", "/bin/mv", "-n",  src, dest, NULL);

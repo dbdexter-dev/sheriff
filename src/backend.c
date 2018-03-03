@@ -115,6 +115,7 @@ rescan_pane(PaneCtx *ctx)
 	return 0;
 }
 
+/* Free a single pane */
 int
 free_pane(PaneCtx *ctx)
 {

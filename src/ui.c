@@ -217,10 +217,13 @@ update_status_top(Dirview *win, const TabCtx *tabs)
 		for (; tab_fullname[i] != '/' && i>=0; i--)
 			;
 		i++;
-		if (i>0) {
+		if (tab_fullname[i] != '\0') {
 			strchomp(tab_fullname+i, tabname, TABNAME_MAX);
 			cur_off -= strlen(tabname) + 1;
 			mvwprintw(win->win, 0, cur_off, "%s", tabname);
+		} else {
+			cur_off -= 2;
+			mvwprintw(win->win, 0, cur_off, "/");
 		}
 	}
 

@@ -64,7 +64,7 @@ static TabCtx *m_ctx;
 static int tabcount;
 static int cur_tab = 0;
 static Clipboard m_clip;
-static sem_t m_sem;
+static sem_t m_update_sem;
 
 /* Keybind handlers {{{*/
 
@@ -204,6 +204,7 @@ void
 navigate(const Arg *arg)
 {
 	Direntry *dir = m_view[CENTER].ctx->dir;
+
 	if (arg->i == 0) {
 		return;
 	}
@@ -222,6 +223,7 @@ navigate(const Arg *arg)
 	}
 }
 
+/* Clone the current tab */
 void
 tab_clone(const Arg *arg)
 {
@@ -240,6 +242,7 @@ tab_clone(const Arg *arg)
 	rel_tabswitch(&zero);
 }
 
+/* Delete the current tab */
 void
 tab_delete(const Arg *arg)
 {
@@ -386,8 +389,7 @@ enter_directory()
 	if (m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->mode == 0) {
 		status = 1;
 	} else {
-		if (navigate_fwd(m_view[LEFT].ctx, m_view[CENTER].ctx, m_view[RIGHT].ctx))
-			die("Couldn't navigate_fwd");
+		assert(!navigate_fwd(m_view[LEFT].ctx, m_view[CENTER].ctx, m_view[RIGHT].ctx));
 		/* Update the top and bottom bars to reflect the change in the center
 		 * window, then refresh the main views. The two bar-windows are updated
 		 * every time something happens anyway in the main control loop */
@@ -411,9 +413,7 @@ exit_directory()
 	int status;
 
 	status = 0;
-	if (navigate_back(m_view[LEFT].ctx, m_view[CENTER].ctx, m_view[RIGHT].ctx)) {
-		die("Couldn't navigate_back");
-	}
+	assert(!navigate_back(m_view[LEFT].ctx, m_view[CENTER].ctx, m_view[RIGHT].ctx));
 	/* As in enter_directory, update the directories associated to the top and
 	 * bottom bars, and update the views since we've changed their underlying
 	 * associations */
@@ -433,10 +433,11 @@ exit_directory()
 void
 queue_update()
 {
-	sem_post(&m_sem);
+	sem_post(&m_update_sem);
+	return;
 }
 
-/* Handler that takes care of resizing the subviews when a SIGWINCH is received.
+/* Handler that takes care of resizing the subviews when KEY_RESIZE is received.
  * This function is one of the reasons why there has to be a global array of
  * Dirview ptrs */
 void
@@ -485,7 +486,7 @@ resize_handler()
 int
 tab_select(int idx)
 {
-	int tabidx;
+	int retval;
 	TabCtx *tmp;
 
 	/* This is so ugly, I'm sorry :c */
@@ -495,24 +496,20 @@ tab_select(int idx)
 		idx = 0;
 	}
 
+	/* Account for negative indexes */
 	if (idx < 0) {
 		idx += tabcount;
 	}
 
-	tabidx=0;
+	retval = idx;
+	/* Set tmp to point to the tab we want to switch to */
 	for (tmp = m_ctx; idx > 0; idx--) {
 		tmp = tmp->next;
-		if (!tmp) {
-			tabidx = 0;
-			tmp = m_ctx;
-		} else {
-			tabidx++;
-		}
 	}
 
 	tab_switch(m_view, tmp, m_ctx);
 
-	return tabidx;
+	return retval;
 }
 
 
@@ -522,7 +519,7 @@ tab_select(int idx)
 void
 update_reaper()
 {
-	if (!sem_trywait(&m_sem)) {
+	if (!sem_trywait(&m_update_sem)) {
 		rescan_listing(m_view[CENTER].ctx->dir);
 		refresh_listing(m_view + CENTER, 1);
 	}
@@ -538,11 +535,7 @@ xdg_open(Direntry *dir)
 	int wstatus;
 	pid_t pid;
 
-	fname = safealloc(sizeof(*fname) * (strlen(dir->path) +
-	                                    strlen(dir->tree[dir->sel_idx]->name) +
-	                                    1 + 1));
-	sprintf(fname, "%s/%s", dir->path, dir->tree[dir->sel_idx]->name);
-
+	fname = join_path(dir->path, dir->tree[dir->sel_idx]->name);
 	associated = 0;
 
 	/* Extract the file extension, if one exists. Has to work from the end of
@@ -598,7 +591,7 @@ main(int argc, char *argv[])
 
 	setlocale(LC_ALL, "");                 /* Enable unicode goodness */
 	memset(&m_clip, '\0', sizeof(m_clip)); /* Initialize the yank buffer */
-	sem_init(&m_sem, 0, 0);                /* Initialize the update semaphore */
+	sem_init(&m_update_sem, 0, 0);                /* Initialize the update semaphore */
 	signal(SIGUSR1, queue_update);
 
 	/* Initialize ncurses */
@@ -642,7 +635,7 @@ main(int argc, char *argv[])
 	}
 
 	/* Terminate ncurses session */
-	sem_destroy(&m_sem);
+	sem_destroy(&m_update_sem);
 	windows_deinit(m_view);
 	tabctx_deinit(&m_ctx);
 	clip_deinit(&m_clip);

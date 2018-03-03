@@ -20,6 +20,7 @@ static Assoc associations[] = {
 
 static Key c_multi[] = {
 	{ 'd',          quick_cd,           {0}},
+	{ 'w',          rename_cur,         {0}},
 	{ '\0',         NULL,               {0}},
 };
 

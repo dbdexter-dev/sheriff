@@ -50,6 +50,7 @@ static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
 static void  rel_highlight(const Arg *arg);
 static void  rel_tabswitch(const Arg *arg);
+static void  rename_cur(const Arg *arg);
 static void  tab_clone(const Arg *arg);
 static void  tab_delete(const Arg *arg);
 static void  visualmode_toggle(const Arg *arg);
@@ -274,8 +275,6 @@ paste_cur(const Arg *arg)
 
 	dialog(m_view[BOT].win, "Selection pasted", NULL);
 
-	associate_dir(m_view[TOP].ctx, m_view[CENTER].ctx->dir);
-	associate_dir(m_view[BOT].ctx, m_view[CENTER].ctx->dir);
 	refresh_listing(m_view + CENTER, 1);
 }
 
@@ -321,6 +320,28 @@ void
 rel_tabswitch(const Arg *arg)
 {
 	cur_tab = tab_select(cur_tab - arg->i);
+}
+
+/* Rename the currently highlighted file */
+void
+rename_cur(const Arg *arg)
+{
+	char dest[256];
+	char *realdest;
+
+	/* TODO this will change once bulkrename is implemented */
+	clear_dir_selection(m_view[CENTER].ctx->dir);
+	m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected = 1;
+	clip_init(&m_clip, m_view[CENTER].ctx->dir, OP_MOVE);
+	m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected = 0;
+
+	dialog(m_view[BOT].win, "rename: ", dest);
+
+	if (dest[0] != '\0') {
+		realdest = join_path(m_view[CENTER].ctx->dir->path, dest);
+		clip_exec(&m_clip, realdest);
+		free(realdest);
+	}
 }
 
 /* Toggle visual selection mode */
@@ -577,6 +598,9 @@ xdg_open(Direntry *dir)
 
 	/* Restore curses mode */
 	reset_prog_mode();
+	if (WEXITSTATUS(wstatus)) {
+		dialog(m_view[BOT].win, "Warning: subprocess exited with non-zero status", NULL);
+	}
 	for (i=0; i<WIN_NR; i++) {
 		wrefresh(m_view[i].win);
 	}

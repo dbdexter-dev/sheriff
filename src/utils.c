@@ -7,7 +7,7 @@
 
 /* Die atrociously when something bad happens */
 void
-die(char *msg)
+die(const char *msg)
 {
 	fprintf(stderr, "[FATAL]: %s >.<\n", msg);
 	exit(1);
@@ -16,7 +16,7 @@ die(char *msg)
 /* Given a parent directory and a file in it, concatenate them to create a full
  * path. XXX: remember to free the returned pointer in the callee */
 char*
-join_path(char *parent, char *child)
+join_path(const char *parent, const char *child)
 {
 	char *ret;
 	ret = safealloc(sizeof(*ret) * (strlen(parent) + strlen(child) + 1 + 1));

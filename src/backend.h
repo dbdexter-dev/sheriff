@@ -1,5 +1,5 @@
 /**
- * All the functions dealing with Dirview structs are defined here.
+ * All the functions dealing with PaneCtx structs are defined here.
  */
 #ifndef BACKEND_H
 #define BACKEND_H
@@ -12,16 +12,17 @@
 #define MAXHOSTNLEN 32
 
 typedef struct {
-	WINDOW *win;            /* Ncurses window being managed */
-	Direntry *dir;          /* Directory associated with the view */
-	int offset;	            /* Offset from the beginning of the screen */
+	Direntry *dir;
+	int offset;
 	int visual;
-} Dirview;
+} PaneCtx;
 
-int  associate_dir(Dirview *view, Direntry *direntry);
-int  navigate_fwd(Dirview *left, Dirview *center, Dirview *right);
-int  navigate_back(Dirview *left, Dirview *center, Dirview *right);
-int  rescan_win(Dirview *win);
-int  update_win_with_path(Dirview *win, const char *path);
+int  associate_dir(PaneCtx *ctx, Direntry *direntry);
+int  free_pane(PaneCtx *ctx);
+int  init_pane_with_path(PaneCtx *ctx, const char *path);
+int  navigate_fwd(PaneCtx *left, PaneCtx *center, PaneCtx *right);
+int  navigate_back(PaneCtx *left, PaneCtx *center, PaneCtx *right);
+int  recheck_offset(PaneCtx *ctx, int nr);
+int  rescan_pane(PaneCtx *ctx);
 
 #endif

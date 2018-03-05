@@ -220,7 +220,29 @@ populate_tree(Direntry *dir, const char *path)
 			dir->tree = safealloc(sizeof(*(dir->tree)));
 			memset(dir->tree, '\0', sizeof(*(dir->tree)));
 		}
-		goto error_catcher;
+		dir->tree[0]->size = -1;
+		dir->tree[0]->mode = 0;
+		switch (errno) {
+		case EACCES:
+			strcpy(dir->tree[0]->name, "(permission denied)");
+			break;
+		case EIO:
+			strcpy(dir->tree[0]->name, "(unreadable)");
+			break;
+		case EMFILE:        /* Intentional fallthrough */
+		case ENFILE:
+			strcpy(dir->tree[0]->name, "(file descriptor limit reached)");
+			break;
+		case ENOMEM:
+			strcpy(dir->tree[0]->name, "(out of memory)");
+			break;
+		default:
+			strcpy(dir->tree[0]->name, "(on fire)");
+			break;
+		}
+
+		dir->count = 1;
+		return 1;
 	}
 	/* Reallocte a chunk of memory to contain all the elements if we don't have
 	 * enough. Use realloc or malloc depending on whether the dir->tree array is
@@ -267,35 +289,32 @@ populate_tree(Direntry *dir, const char *path)
 		closedir(dp);
 	} else {
 		memset(dir->tree, '\0', sizeof(*dir->tree));
-		goto error_catcher;
+		dir->tree[0]->size = -1;
+		dir->tree[0]->mode = 0;
+		switch (errno) {
+		case EACCES:
+			strcpy(dir->tree[0]->name, "(permission denied)");
+			break;
+		case EIO:
+			strcpy(dir->tree[0]->name, "(unreadable)");
+			break;
+		case EMFILE:        /* Intentional fallthrough */
+		case ENFILE:
+			strcpy(dir->tree[0]->name, "(file descriptor limit reached)");
+			break;
+		case ENOMEM:
+			strcpy(dir->tree[0]->name, "(out of memory)");
+			break;
+		default:
+			strcpy(dir->tree[0]->name, "(on fire)");
+			break;
+		}
+
+		dir->count = 1;
+		return 1;
 	}
 
 	return 0;
-
-error_catcher:
-	dir->tree[0]->size = -1;
-	dir->tree[0]->mode = 0;
-	switch (errno) {
-	case EACCES:
-		strcpy(dir->tree[0]->name, "(permission denied)");
-		break;
-	case EIO:
-		strcpy(dir->tree[0]->name, "(unreadable)");
-		break;
-	case EMFILE:        /* Intentional fallthrough */
-	case ENFILE:
-		strcpy(dir->tree[0]->name, "(file descriptor limit reached)");
-		break;
-	case ENOMEM:
-		strcpy(dir->tree[0]->name, "(out of memory)");
-		break;
-	default:
-		strcpy(dir->tree[0]->name, "(on fire)");
-		break;
-	}
-
-	dir->count = 1;
-	return 1;
 }
 
 /* Quicksort algorithm pass, center element is the pivot */

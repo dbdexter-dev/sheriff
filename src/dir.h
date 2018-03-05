@@ -9,7 +9,6 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <linux/limits.h>
-#include <pthread.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>

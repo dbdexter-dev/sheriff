@@ -15,7 +15,7 @@
 #define PAIR_RED_DEF 6
 
 #define MAXCMDLEN 128
-#define UPD_INTERVAL 250
+#define UPD_INTERVAL 100
 
 /* Convenient enum to address a specific view in main_view */
 enum windows

@@ -32,6 +32,8 @@ typedef struct {
 	const Arg arg;
 } Key;
 
+char *realpath(const char *path, char *resolved_path);
+
 static int   direct_cd(char *center_path);
 static int   enter_directory();
 static int   exit_directory();
@@ -48,6 +50,7 @@ static void  filesearch(const Arg *arg);
 static void  navigate(const Arg *arg);
 static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
+static void  refresh_all(const Arg *arg);
 static void  rel_highlight(const Arg *arg);
 static void  rel_tabswitch(const Arg *arg);
 static void  rename_cur(const Arg *arg);
@@ -61,10 +64,7 @@ static void  yank_cur(const Arg *arg);
  * keybind handlers
  */
 static Dirview m_view[WIN_NR];
-static TabCtx *m_ctx;
-static int tabcount;
 static int cur_tab = 0;
-static Clipboard m_clip;
 static sem_t m_update_sem;
 
 /* Keybind handlers {{{*/
@@ -101,7 +101,7 @@ abs_highlight(const Arg *arg)
 	}
 
 	/* If the selected element is a directory, update the right pane
-	 * Otherwise, free it so that refresh_listing will show a blank pane */
+	 * Otherwise, free it so that render_tree will show a blank pane */
 	if (S_ISDIR(dir->tree[dir->sel_idx]->mode)) {
 		fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
 		init_pane_with_path(m_view[RIGHT].ctx, fullpath);
@@ -110,17 +110,17 @@ abs_highlight(const Arg *arg)
 		init_pane_with_path(m_view[RIGHT].ctx, NULL);
 	}
 
-	refresh_listing(m_view + RIGHT, 0);
+	render_tree(m_view + RIGHT, 0);
 
 	/* If the directory view doesn't have to be changed, do a simple wrefresh;
 	 * otherwise do a full redraw */
 	if (check_offset_changed(m_view + CENTER) || m_view[CENTER].ctx->visual) {
-		refresh_listing(m_view + CENTER, 1);
+		render_tree(m_view + CENTER, 1);
 	} else {
 		wrefresh(m_view[CENTER].win);
 	}
 
-	update_status_top(m_view + TOP, m_ctx);
+	update_status_top(m_view + TOP);
 	update_status_bottom(m_view + BOT);
 
 	return;
@@ -172,8 +172,8 @@ filesearch(const Arg *arg)
 		} else {
 			init_pane_with_path(m_view[RIGHT].ctx, NULL);
 		}
-		refresh_listing(m_view + RIGHT, 0);
-		refresh_listing(m_view + CENTER, 1);
+		render_tree(m_view + RIGHT, 0);
+		render_tree(m_view + CENTER, 1);
 	}
 }
 
@@ -187,6 +187,7 @@ chain(const Arg *arg)
 	int i;
 	Key *binds = arg->v;
 
+	wtimeout(m_view[BOT].win, -1);
 	do {
 		/* Handle resize events while waiting for input */
 		ch = wgetch(m_view[BOT].win);
@@ -201,6 +202,7 @@ chain(const Arg *arg)
 			}
 		}
 	} while (ch == KEY_RESIZE);
+	wtimeout(m_view[BOT].win, UPD_INTERVAL);
 }
 
 /* Handle navigation, either forward or backwards, through directories or
@@ -234,36 +236,22 @@ tab_clone(const Arg *arg)
 {
 	const char *path;
 	const Arg zero = {.i = 0};
-	TabCtx *tmp;
 
 	path = m_view[CENTER].ctx->dir->path;
-	tabctx_append(&m_ctx, path);
-
-	tabcount = 0;
-	for (tmp = m_ctx; tmp != NULL; tmp = tmp->next) {
-		tabcount++;
-	}
+	tabctx_append(path);
 
 	rel_tabswitch(&zero);
 }
 
-/* Delete the current tab */
+/* Delete the current tab, and exit if there are no tabs left */
 void
 tab_delete(const Arg *arg)
 {
-	TabCtx *tmp;
 	const Arg zero = {.i = 0};
 
-	if (tabcount <= 1) {
+	if (tabctx_remove(cur_tab)) {
 		ungetch('q');
 	} else {
-		tabctx_remove(&m_ctx, cur_tab);
-
-		tabcount = 0;
-		for (tmp = m_ctx; tmp != NULL; tmp = tmp->next) {
-			tabcount++;
-		}
-
 		rel_tabswitch(&zero);
 	}
 }
@@ -274,12 +262,12 @@ paste_cur(const Arg *arg)
 {
 	Direntry *dir = m_view[CENTER].ctx->dir;
 
-	clip_exec(&m_clip, dir->path);
+	clip_exec(dir->path);
 	m_view[CENTER].ctx->visual = 0;
 
 	dialog(m_view[BOT].win, NULL, "Selection pasted");
 
-	refresh_listing(m_view + CENTER, 1);
+	render_tree(m_view + CENTER, 1);
 }
 
 /* Cd into a specific directory directly */
@@ -298,9 +286,14 @@ quick_cd(const Arg *arg)
 	}
 }
 
+void
+refresh_all(const Arg *arg)
+{
+	queue_update();
+}
+
 /* Highlight a file in the center window given an offset from the currently
  * highlighted index (offset in arg->i)*/
-/* TODO visual selection not updating until you get out of it */
 void
 rel_highlight(const Arg *arg)
 {
@@ -336,14 +329,14 @@ rename_cur(const Arg *arg)
 	/* TODO this will change once bulkrename is implemented */
 	clear_dir_selection(m_view[CENTER].ctx->dir);
 	m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected = 1;
-	clip_init(&m_clip, m_view[CENTER].ctx->dir, OP_MOVE);
+	clip_update(m_view[CENTER].ctx->dir, OP_MOVE);
 	m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected = 0;
 
 	dialog(m_view[BOT].win, dest, "rename: ");
 
 	if (dest[0] != '\0') {
 		realdest = join_path(m_view[CENTER].ctx->dir->path, dest);
-		clip_exec(&m_clip, realdest);
+		clip_exec(realdest);
 		free(realdest);
 	}
 }
@@ -354,19 +347,19 @@ visualmode_toggle(const Arg *arg)
 {
 	m_view[CENTER].ctx->visual ^= 1;
 	m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected ^= 1;
-	refresh_listing(m_view + CENTER, 1);
+	render_tree(m_view + CENTER, 1);
 }
 
 /* Yank the current selection to clipboard */
 void
 yank_cur(const Arg *arg)
 {
-	clip_init(&m_clip, m_view[CENTER].ctx->dir, (arg->i == 1 ? OP_COPY : OP_MOVE));
+	clip_update(m_view[CENTER].ctx->dir, (arg->i == 1 ? OP_COPY : OP_MOVE));
 	clear_dir_selection(m_view[CENTER].ctx->dir);
 	m_view[CENTER].ctx->visual = 0;
 
 	dialog(m_view[BOT].win, NULL, "Selection yanked");
-	refresh_listing(m_view + CENTER, 1);
+	render_tree(m_view + CENTER, 1);
 }
 /*}}}*/
 #include "config.h"
@@ -389,11 +382,11 @@ direct_cd(char *path)
 		status |= init_pane_with_path(m_view[CENTER].ctx, path);
 		status |= init_pane_with_path(m_view[RIGHT].ctx, path);
 
-		status |= refresh_listing(m_view + LEFT, 0);
-		status |= refresh_listing(m_view + CENTER, 1);
-		status |= refresh_listing(m_view + RIGHT, 0);
+		status |= render_tree(m_view + LEFT, 0);
+		status |= render_tree(m_view + CENTER, 1);
+		status |= render_tree(m_view + RIGHT, 0);
 
-		update_status_top(m_view + TOP, m_ctx);
+		update_status_top(m_view + TOP);
 		update_status_bottom(m_view + BOT);
 	} else {
 		status = 1;
@@ -420,11 +413,11 @@ enter_directory()
 		 * every time something happens anyway in the main control loop */
 		status |= associate_dir(m_view[TOP].ctx, m_view[CENTER].ctx->dir);
 		status |= associate_dir(m_view[BOT].ctx, m_view[CENTER].ctx->dir);
-		status |= refresh_listing(m_view + LEFT, 0);
-		status |= refresh_listing(m_view + CENTER, 1);
-		status |= refresh_listing(m_view + RIGHT, 0);
+		status |= render_tree(m_view + LEFT, 0);
+		status |= render_tree(m_view + CENTER, 1);
+		status |= render_tree(m_view + RIGHT, 0);
 
-		update_status_top(m_view + TOP, m_ctx);
+		update_status_top(m_view + TOP);
 		update_status_bottom(m_view + BOT);
 	}
 	return status;
@@ -444,11 +437,11 @@ exit_directory()
 	 * associations */
 	status |= associate_dir(m_view[TOP].ctx, m_view[CENTER].ctx->dir);
 	status |= associate_dir(m_view[BOT].ctx, m_view[CENTER].ctx->dir);
-	status |= refresh_listing(m_view + LEFT, 0);
-	status |= refresh_listing(m_view + CENTER, 1);
-	status |= refresh_listing(m_view + RIGHT, 0);
+	status |= render_tree(m_view + LEFT, 0);
+	status |= render_tree(m_view + CENTER, 1);
+	status |= render_tree(m_view + RIGHT, 0);
 
-	update_status_top(m_view + TOP, m_ctx);
+	update_status_top(m_view + TOP);
 	update_status_bottom(m_view + BOT);
 
 	return status;
@@ -500,10 +493,10 @@ resize_handler()
 	wresize(m_view[RIGHT].win, nr - 2, sc_r - 1);
 	mvwin(m_view[RIGHT].win, 1, sc_l + mc);
 
-	update_status_top(m_view + TOP, m_ctx);
-	refresh_listing(m_view + LEFT, 0);
-	refresh_listing(m_view + CENTER, 1);
-	refresh_listing(m_view + RIGHT, 0);
+	update_status_top(m_view + TOP);
+	render_tree(m_view + LEFT, 0);
+	render_tree(m_view + CENTER, 1);
+	render_tree(m_view + RIGHT, 0);
 	update_status_bottom(m_view + BOT);
 }
 
@@ -511,26 +504,12 @@ resize_handler()
 int
 tab_select(int idx)
 {
-	int retval;
-	TabCtx *tmp;
+	TabCtx *switch_dest;
 
-	/* This is so ugly, I'm sorry :c */
-	idx = (tabcount ? (idx % tabcount) : 0);
+	switch_dest = tabctx_by_idx(&idx);
+	tab_switch(m_view, switch_dest);
 
-	/* Account for negative indexes */
-	if (idx < 0) {
-		idx += tabcount;
-	}
-
-	retval = idx;
-	/* Set tmp to point to the tab we want to switch to */
-	for (tmp = m_ctx; idx > 0; idx--) {
-		tmp = tmp->next;
-	}
-
-	tab_switch(m_view, tmp, m_ctx);
-
-	return retval;
+	return idx;
 }
 
 
@@ -541,8 +520,12 @@ void
 update_reaper()
 {
 	if (!sem_trywait(&m_update_sem)) {
+		rescan_listing(m_view[LEFT].ctx->dir);
 		rescan_listing(m_view[CENTER].ctx->dir);
-		refresh_listing(m_view + CENTER, 1);
+		rescan_listing(m_view[RIGHT].ctx->dir);
+		render_tree(m_view + LEFT, 0);
+		render_tree(m_view + CENTER, 1);
+		render_tree(m_view + RIGHT, 0);
 	}
 }
 
@@ -568,10 +551,11 @@ xdg_open(Direntry *dir)
 	/* If the file has an extension, check if it's already associated to a
 	 * command to run */
 	if (*ext == '.') {
-		for (i=0; associations[i].ext != NULL && !associated; i++) {
+		for (i=0; associations[i].ext != NULL; i++) {
 			if (!strcmp(associations[i].ext, ext)) {
 				associated = 1;
 				strcpy(cmd, associations[i].cmd);
+				break;
 			}
 		}
 	}
@@ -598,10 +582,13 @@ xdg_open(Direntry *dir)
 
 	/* Restore curses mode */
 	reset_prog_mode();
+
+	/* Issue warning if the subprocess exited with an error status */
 	if (WEXITSTATUS(wstatus)) {
 		dialog(m_view[BOT].win, NULL,
 		       "Subprocess exited with status %d", WEXITSTATUS(wstatus));
 	}
+
 	for (i=0; i<WIN_NR; i++) {
 		wrefresh(m_view[i].win);
 	}
@@ -615,12 +602,12 @@ main(int argc, char *argv[])
 	wchar_t ch;
 
 	setlocale(LC_ALL, "");                 /* Enable unicode goodness */
-	memset(&m_clip, '\0', sizeof(m_clip)); /* Initialize the yank buffer */
-	sem_init(&m_update_sem, 0, 0);                /* Initialize the update semaphore */
-	signal(SIGUSR1, queue_update);
+	clip_init();                           /* Initialize clipboard */
+	sem_init(&m_update_sem, 0, 0);         /* Initialize the update semaphore */
+	signal(SIGUSR1, queue_update);         /* Allow children to ask for an update */
 
 	/* Initialize ncurses */
-	initscr();                             /* Initialize ncurses sesion */
+	initscr();                             /* Initialize ncurses screen */
 	noecho();                              /* Don't echo keys pressed */
 	cbreak();                              /* Quasi-raw input */
 	curs_set(0);                           /* Hide cursor */
@@ -634,7 +621,7 @@ main(int argc, char *argv[])
 	keypad(m_view[BOT].win, TRUE);
 
 	path = realpath(".", NULL);
-	tabctx_append(&m_ctx, path);
+	tabctx_append(path);
 	free(path);
 
 	tab_select(0);
@@ -662,8 +649,8 @@ main(int argc, char *argv[])
 	/* Terminate ncurses session */
 	sem_destroy(&m_update_sem);
 	windows_deinit(m_view);
-	tabctx_deinit(&m_ctx);
-	clip_deinit(&m_clip);
+	tabctx_deinit();
+	clip_deinit();
 	endwin();
 	return 0;
 }

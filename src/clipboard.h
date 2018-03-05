@@ -28,8 +28,9 @@ typedef struct {
 	pthread_mutex_t mutex;
 } Clipboard;
 
-int clip_deinit(Clipboard *clip);
-int clip_exec(Clipboard *clip, char *destpath);
-int clip_init(Clipboard *clip, Direntry *dir, int op);
+int clip_deinit();
+int clip_exec(char *destpath);
+int clip_init();
+int clip_update(Direntry *dir, int op);
 
 #endif

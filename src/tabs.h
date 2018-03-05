@@ -8,8 +8,10 @@ typedef struct tbctx {
 	struct tbctx *next;
 } TabCtx;
 
-int  tabctx_append(TabCtx **ctx, const char *path);
-int  tabctx_deinit(TabCtx **ctx);
-int  tabctx_remove(TabCtx **ctx, int idx);
+int     tabctx_append(const char *path);
+TabCtx* tabctx_by_idx(int *idx);
+int     tabctx_deinit();
+TabCtx* tabctx_get();
+int     tabctx_remove(int idx);
 
 #endif

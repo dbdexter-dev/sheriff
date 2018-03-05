@@ -19,7 +19,7 @@ check_offset_changed(Dirview *win)
 /* Render a directory listing on a window. If the directoly listing is NULL,
  * clear the relative window */
 int
-refresh_listing(Dirview *win, int show_sizes)
+render_tree(Dirview *win, int show_sizes)
 {
 	int mr, mc, i;
 	char *tmpstring;
@@ -82,8 +82,9 @@ refresh_listing(Dirview *win, int show_sizes)
 		}
 		/* Chomp string so that it fits in the window */
 		if (!show_sizes || tmpfile->size < 0) {
-			if (strchomp(tmpfile->name, tmpstring, mc-1))
+			if (strchomp(tmpfile->name, tmpstring, mc-1)) {
 				die("We do not kno de wey (read: strchomp failed)");
+			}
 			wprintw(win->win, "%s\n", tmpstring);
 		} else {
 			/* Convert byte count to human-readable size */
@@ -107,7 +108,7 @@ refresh_listing(Dirview *win, int show_sizes)
 
 /* Switch tab context and refresh the views */
 int
-tab_switch(Dirview view[WIN_NR], const TabCtx *ctx, const TabCtx *head)
+tab_switch(Dirview view[WIN_NR], const TabCtx *ctx)
 {
 	assert(view && ctx);
 
@@ -123,11 +124,11 @@ tab_switch(Dirview view[WIN_NR], const TabCtx *ctx, const TabCtx *head)
 	rescan_pane(ctx->center);
 	rescan_pane(ctx->right);
 
-	refresh_listing(view+LEFT, 0);
-	refresh_listing(view+CENTER, 1);
-	refresh_listing(view+RIGHT, 0);
+	render_tree(view+LEFT, 0);
+	render_tree(view+CENTER, 1);
+	render_tree(view+RIGHT, 0);
 
-	update_status_top(view+TOP, head);
+	update_status_top(view+TOP);
 	update_status_bottom(view+BOT);
 
 	return 0;
@@ -178,12 +179,15 @@ update_status_bottom(Dirview *win)
 }
 
 void
-update_status_top(Dirview *win, const TabCtx *tabs)
+update_status_top(Dirview *win)
 {
 	char *user, *wd, *hi, *tab_fullname;
 	char hostn[MAXHOSTNLEN+1];
 	char tabname[TABNAME_MAX+1];
 	int cur_off, i;
+	const TabCtx *tabs;
+
+	tabs = tabctx_get();
 
 	user = getenv("USER");
 	cur_off = getmaxx(win->win);

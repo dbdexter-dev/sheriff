@@ -19,3 +19,14 @@ src/config.h header and recompiling.
   specify a default program to open files with a certain extension. Each element
   of the array has 2 fields: an extension, and the name of the executable to
   launch.
+
+## Compiling and installing
+
+Since this project is still very unstable, running `make` will not strip the
+executable, and will instead retain debug symbols and compile unit tests. A
+`release` target is available nonetheless, should anyone want to enable compiler
+optimizations. To do so, run:
+
+```
+make release && sudo make install
+```

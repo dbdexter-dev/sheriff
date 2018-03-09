@@ -600,11 +600,15 @@ main(int argc, char *argv[])
 	int i, max_row, max_col;
 	char *path;
 	wchar_t ch;
+	struct sigaction update_act;
 
 	setlocale(LC_ALL, "");                 /* Enable unicode goodness */
 	clip_init();                           /* Initialize clipboard */
 	sem_init(&m_update_sem, 0, 0);         /* Initialize the update semaphore */
-	signal(SIGUSR1, queue_update);         /* Allow children to ask for an update */
+	update_act.sa_handler = queue_update;
+	sigemptyset(&update_act.sa_mask);
+	update_act.sa_flags = 0;
+	sigaction(SIGUSR1, &update_act, NULL); /* Allow children to ask for an update */
 
 	/* Initialize ncurses */
 	initscr();                             /* Initialize ncurses screen */

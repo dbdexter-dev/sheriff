@@ -314,6 +314,13 @@ populate_tree(Direntry *dir, const char *path)
 		return 1;
 	}
 
+	if (entries == 0) {
+		dir->tree[0]->size = -1;
+		dir->tree[0]->mode = 0;
+		strcpy(dir->tree[0]->name, "(empty)");
+		dir->count = 1;
+	}
+
 	return 0;
 }
 

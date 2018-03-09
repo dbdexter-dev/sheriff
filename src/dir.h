@@ -15,7 +15,7 @@
 
 typedef struct {
 	char name[NAME_MAX+1];  /* NAME_MAX defined in dirent.h */
-	unsigned long size;
+	long size;
 	uid_t uid, gid;
 	mode_t mode;
 	time_t lastchange;

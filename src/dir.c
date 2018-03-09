@@ -50,7 +50,6 @@ free_listing(Direntry **direntry)
 		for (i=0; i<(*direntry)->max_nodes; i++) {
 			free((*direntry)->tree[i]);
 		}
-
 		free((*direntry)->tree);
 		(*direntry)->tree = NULL;
 	}
@@ -75,12 +74,12 @@ init_listing(Direntry **direntry, const char *path)
 	assert(direntry);
 
 	if (!(*direntry)) {
-		/* Fully initialize struct */
+		/* Fully initialize the Direntry struct */
 		*direntry = safealloc(sizeof(**direntry));
 		(*direntry)->max_nodes = 0;
 		(*direntry)->path = NULL;
 	} else {
-		/* Semi-initialize a dirty direntry struct */
+		/* Semi-initialize a dirty Direntry struct */
 		(*direntry)->count = 0;
 	}
 
@@ -210,8 +209,9 @@ populate_tree(Direntry *dir, const char *path)
 	/* Calculate how many elements we need to allocate */
 	entries = 0;
 	if ((dp = opendir(path))) {
-		while ((ep = readdir(dp)))
+		while ((ep = readdir(dp))) {
 			entries++;
+		}
 		closedir(dp);
 		dir->count = entries;
 	/* Opendir failed, create a single element with error code */
@@ -220,15 +220,21 @@ populate_tree(Direntry *dir, const char *path)
 			dir->tree = safealloc(sizeof(*(dir->tree)));
 			memset(dir->tree, '\0', sizeof(*(dir->tree)));
 		}
-
 		dir->tree[0]->size = -1;
 		dir->tree[0]->mode = 0;
 		switch (errno) {
 		case EACCES:
-			strcpy(dir->tree[0]->name, "(inaccessible)");
+			strcpy(dir->tree[0]->name, "(permission denied)");
 			break;
 		case EIO:
 			strcpy(dir->tree[0]->name, "(unreadable)");
+			break;
+		case EMFILE:        /* Intentional fallthrough */
+		case ENFILE:
+			strcpy(dir->tree[0]->name, "(file descriptor limit reached)");
+			break;
+		case ENOMEM:
+			strcpy(dir->tree[0]->name, "(out of memory)");
 			break;
 		default:
 			strcpy(dir->tree[0]->name, "(on fire)");
@@ -239,10 +245,11 @@ populate_tree(Direntry *dir, const char *path)
 		return 1;
 	}
 	/* Reallocte a chunk of memory to contain all the elements if we don't have
-	 * enough */
+	 * enough. Use realloc or malloc depending on whether the dir->tree array is
+	 * already initalized or not */
 	if (dir->max_nodes < entries) {
 		if (dir->max_nodes == 0) {
-			dir->tree = malloc(sizeof(*dir->tree) * entries);
+			dir->tree = safealloc(sizeof(*dir->tree) * entries);
 		} else {
 			dir->tree = realloc(dir->tree, sizeof(*dir->tree) * entries);
 		}
@@ -253,6 +260,7 @@ populate_tree(Direntry *dir, const char *path)
 
 		dir->max_nodes = entries;
 	}
+
 	/* Populate the directory listing */
 	if ((dp = opendir(path))) {
 		for (i = 0; i < entries; i++) {
@@ -281,20 +289,27 @@ populate_tree(Direntry *dir, const char *path)
 		closedir(dp);
 	} else {
 		memset(dir->tree, '\0', sizeof(*dir->tree));
-
 		dir->tree[0]->size = -1;
 		dir->tree[0]->mode = 0;
 		switch (errno) {
 		case EACCES:
-			strcpy(dir->tree[0]->name, "(forbidden)");
+			strcpy(dir->tree[0]->name, "(permission denied)");
 			break;
 		case EIO:
 			strcpy(dir->tree[0]->name, "(unreadable)");
+			break;
+		case EMFILE:        /* Intentional fallthrough */
+		case ENFILE:
+			strcpy(dir->tree[0]->name, "(file descriptor limit reached)");
+			break;
+		case ENOMEM:
+			strcpy(dir->tree[0]->name, "(out of memory)");
 			break;
 		default:
 			strcpy(dir->tree[0]->name, "(on fire)");
 			break;
 		}
+
 		dir->count = 1;
 		return 1;
 	}

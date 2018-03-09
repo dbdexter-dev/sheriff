@@ -15,7 +15,7 @@
 #define PAIR_RED_DEF 6
 
 #define MAXCMDLEN 128
-#define UPD_INTERVAL 250
+#define UPD_INTERVAL 100
 
 /* Convenient enum to address a specific view in main_view */
 enum windows
@@ -28,7 +28,7 @@ enum windows
 };
 
 void change_highlight(WINDOW* win, int old_idx, int new_idx);
-void dialog(WINDOW *win, char *msg, char *buf);
+void dialog(WINDOW *win, char *buf, const char *msg, ...);
 void init_colors();
 
 #endif

@@ -1,9 +1,18 @@
 SRC=$(wildcard *.c)
-OBJ=${SRC:.c=.0}
+MAINSRC=$(wildcard ../src/*.c)
+OBJ=${SRC:.c=.o}
+
+LDFLAGS += -pthread
 
 .PHONY: default clean
-default:
+
+default: test
+
+test: ${OBJ}
+	gcc ${LDFLAGS} -o $@ $^
 
 clean:
-	rm -f ${OBJ}
+	rm -f ${OBJ} test
 
+%.o: %.c
+	gcc ${CFLAGS} -c -o $@ $<

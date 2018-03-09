@@ -20,6 +20,7 @@ static Assoc associations[] = {
 
 static Key c_multi[] = {
 	{ 'd',          quick_cd,           {0}},
+	{ 'w',          rename_cur,         {0}},
 	{ '\0',         NULL,               {0}},
 };
 
@@ -63,6 +64,7 @@ static Key keys[] = {
 	{ '',         tab_clone,          {0}},
 	{ '\t',         rel_tabswitch,      {.i = +1}},
 	{ 'x',          tab_delete,         {0}},
+	{ '',         refresh_all,        {0}},
 /*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };

@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <ncurses.h>
+#include <stdarg.h>
 #include <time.h>
 #include <unistd.h>
 #include "backend.h"
@@ -9,11 +10,17 @@
 /* Render a dialog prompt in a specified window. Will return the input string
  * through char *input, or just print msg if input == NULL*/
 void
-dialog(WINDOW *win, char *msg, char *input)
+dialog(WINDOW *win, char *input, const char *msg, ...)
 {
+	va_list ap;
+
 	werase(win);
 	wattrset(win, COLOR_PAIR(PAIR_WHITE_DEF));
-	mvwprintw(win, 0, 0, msg);
+	wmove(win, 0, 0);
+
+	va_start(ap, msg);
+	vwprintw(win, msg, ap);
+	va_end(ap);
 
 	if (input) {
 		wtimeout(win, -1);

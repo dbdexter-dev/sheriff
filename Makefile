@@ -4,7 +4,7 @@ PREFIX = /usr
 
 .PHONY: default debug release src tests strip clean install uninstall
 
-default: debug
+default: release
 
 debug: CFLAGS += -g -Werror
 debug: src tests

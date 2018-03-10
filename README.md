@@ -22,11 +22,10 @@ src/config.h header and recompiling.
 
 ## Compiling and installing
 
-Since this project is still very unstable, running `make` will not strip the
-executable, and will instead retain debug symbols and compile unit tests. A
-`release` target is available nonetheless, should anyone want to enable compiler
-optimizations. To do so, run:
+To compile and install sheriff, run:
+```
+make && sudo make install
+```
 
-```
-make release && sudo make install
-```
+If you want to disable compiler optimizations and keep all debug symbols, a
+`debug` target is available.

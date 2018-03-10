@@ -254,18 +254,21 @@ windows_deinit(Dirview view[WIN_NR])
 
 /* Initialize the sub-windows that make up the main view */
 int
-windows_init(Dirview view[WIN_NR], int row, int col, float main_perc)
+windows_init(Dirview view[WIN_NR], int row, int col, int pp[3])
 {
 	int mc, sc_l, sc_r;
+	float sum;
 
 	if (!view) {
 		return -1;
 	}
 
+	sum = pp[0] + pp[1] + pp[2];
+
 	/* Calculate center window and sidebars column count */
-	mc = col  *main_perc;
-	sc_r = (col - mc) / 2;
-	sc_l = col - mc - sc_r;
+	sc_l = col * pp[0]/sum;
+	mc = col * pp[1]/sum;
+	sc_r = col - sc_l - mc;
 
 	view[TOP].win = newwin(1, col, 0, 0);
 	view[BOT].win = newwin(1, col, row - 1, 0);

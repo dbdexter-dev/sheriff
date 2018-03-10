@@ -218,8 +218,8 @@ populate_tree(Direntry *dir, const char *path)
 	} else {
 		if (!(dir->tree)) {
 			dir->tree = safealloc(sizeof(*(dir->tree)));
-			memset(dir->tree, '\0', sizeof(*(dir->tree)));
 		}
+
 		dir->tree[0]->size = -1;
 		dir->tree[0]->mode = 0;
 		switch (errno) {
@@ -288,7 +288,6 @@ populate_tree(Direntry *dir, const char *path)
 		}
 		closedir(dp);
 	} else {
-		memset(dir->tree, '\0', sizeof(*dir->tree));
 		dir->tree[0]->size = -1;
 		dir->tree[0]->mode = 0;
 		switch (errno) {

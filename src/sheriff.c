@@ -17,8 +17,6 @@
 #include "ui.h"
 #include "utils.h"
 
-#define MAIN_PERC 0.6
-#define UPD_INT 0.5
 #define MAXSEARCHLEN MAXCMDLEN
 
 typedef union {
@@ -462,6 +460,7 @@ void
 resize_handler()
 {
 	int i, nr, nc, mc, sc_l, sc_r;
+	float sum;
 
 	/* Re-initialize ncurses with the correct dimensions */
 	werase(stdscr);
@@ -470,9 +469,11 @@ resize_handler()
 	refresh();
 	getmaxyx(stdscr, nr, nc);
 
-	mc = nc  *MAIN_PERC;
-	sc_l = (nc - mc) / 2;
-	sc_r = nc - mc - sc_l;
+	sum = pane_proportions[0] + pane_proportions[1] + pane_proportions[2];
+
+	sc_l = nc * pane_proportions[0]/sum;
+	mc = nc * pane_proportions[1]/sum;
+	sc_r = nc - sc_l - mc;
 
 	for (i=0; i<WIN_NR; i++) {
 		mvwin(m_view[i].win, 0, 0);
@@ -621,7 +622,7 @@ main(int argc, char *argv[])
 
 	getmaxyx(stdscr, max_row, max_col);
 
-	windows_init(m_view, max_row, max_col, MAIN_PERC);
+	windows_init(m_view, max_row, max_col, pane_proportions);
 	keypad(m_view[BOT].win, TRUE);
 
 	path = realpath(".", NULL);

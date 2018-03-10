@@ -9,6 +9,8 @@ typedef struct {
 	char *cmd;
 } Assoc;
 
+static int pane_proportions[] = { 1, 4, 2 };
+
 static Assoc associations[] = {
 	{ ".pdf",   "zathura"},
 	{ ".c",     "nvim"},

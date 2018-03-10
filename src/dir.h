@@ -30,11 +30,12 @@ typedef struct {
 	int max_nodes;          /* Number of nodes allocated in Fileentry** */
 } Direntry;
 
-int clear_dir_selection(Direntry *direntry);
-int init_listing(Direntry **direntry, const char *path);
-int free_listing(Direntry **direntry);
-int rescan_listing(Direntry *direntry);
-int snapshot_tree_selected(Direntry **dest, Direntry *src);
-int try_select(Direntry *direntry, int idx, int mark);
+int  clear_dir_selection(Direntry *direntry);
+void dir_toggle_hidden();
+int  init_listing(Direntry **direntry, const char *path);
+int  free_listing(Direntry **direntry);
+int  rescan_listing(Direntry *direntry);
+int  snapshot_tree_selected(Direntry **dest, Direntry *src);
+int  try_select(Direntry *direntry, int idx, int mark);
 
 #endif

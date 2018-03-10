@@ -7,7 +7,6 @@
 #include "ui.h"
 #include "utils.h"
 
-
 /* Update window offset if needed, return 1 if we did change offset,
  * 0 otherwise */
 int
@@ -82,9 +81,7 @@ render_tree(Dirview *win, int show_sizes)
 		}
 		/* Chomp string so that it fits in the window */
 		if (!show_sizes || tmpfile->size < 0) {
-			if (strchomp(tmpfile->name, tmpstring, mc-1)) {
-				die("We do not kno de wey (read: strchomp failed)");
-			}
+			assert(!strchomp(tmpfile->name, tmpstring, mc-1));
 			wprintw(win->win, "%s\n", tmpstring);
 		} else {
 			/* Convert byte count to human-readable size */
@@ -93,7 +90,7 @@ render_tree(Dirview *win, int show_sizes)
 
 			wprintw(win->win, "%s", tmpstring);
 			mvwprintw(win->win, i - ctx->offset, mc - HUMANSIZE_LEN - 1,
-			          "%6s\n", humansize);
+					  "%6s\n", humansize);
 		}
 		/* Higlight the element marked as selected in the dir tree */
 		if (i == ctx->dir->sel_idx) {
@@ -154,7 +151,6 @@ try_highlight(Dirview *win, int idx)
 	return idx;
 }
 
-
 void
 update_status_bottom(Dirview *win)
 {
@@ -201,14 +197,14 @@ update_status_top(Dirview *win)
 
 	/* For some reason I can't wattrset the color along with A_BOLD :/ */
 	wattrset(win->win, A_BOLD);
-	wattron(win->win, COLOR_PAIR(PAIR_BLUE_DEF));
+	wattron(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
 	mvwprintw(win->win, 0, 0, "%s@%s", user, hostn);
 	wattron(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
 	wprintw(win->win, " %s/", wd);
 	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
 	wprintw(win->win, "%s", hi);
 
-	wattrset(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
+	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
 	for (; tabs != NULL; tabs = tabs->next) {
 		if (tabs->center == win->ctx) {
 			wattron(win->win, A_REVERSE);
@@ -254,18 +250,21 @@ windows_deinit(Dirview view[WIN_NR])
 
 /* Initialize the sub-windows that make up the main view */
 int
-windows_init(Dirview view[WIN_NR], int row, int col, float main_perc)
+windows_init(Dirview view[WIN_NR], int row, int col, int pp[3])
 {
 	int mc, sc_l, sc_r;
+	float sum;
 
 	if (!view) {
 		return -1;
 	}
 
+	sum = pp[0] + pp[1] + pp[2];
+
 	/* Calculate center window and sidebars column count */
-	mc = col  *main_perc;
-	sc_r = (col - mc) / 2;
-	sc_l = col - mc - sc_r;
+	sc_l = col * pp[0]/sum;
+	mc = col * pp[1]/sum;
+	sc_r = col - sc_l - mc;
 
 	view[TOP].win = newwin(1, col, 0, 0);
 	view[BOT].win = newwin(1, col, row - 1, 0);

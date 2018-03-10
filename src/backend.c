@@ -27,6 +27,8 @@ int
 init_pane_with_path(PaneCtx *ctx, const char *path)
 {
 	init_listing(&ctx->dir, path);
+	ctx->visual = 0;
+	ctx->offset = 0;
 	return 0;
 }
 
@@ -85,7 +87,11 @@ navigate_fwd(PaneCtx *left, PaneCtx *center, PaneCtx *right)
 	fullpath = join_path(center->dir->path, centersel->name);
 
 	/* Init right pane with child directory contents */
-	init_pane_with_path(right, fullpath);
+	if (S_ISDIR(centersel->mode)) {
+		init_pane_with_path(right, fullpath);
+	} else {
+		init_pane_with_path(right, NULL);
+	}
 	free(fullpath);
 
 	return 0;

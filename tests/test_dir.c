@@ -81,16 +81,15 @@ test_init_listing()
 
 	mu_assert("test_init_listing not alloc'd", dir);
 	mu_assert("test_init_listing not properly init'd", dir->path && dir->tree);
-	mu_assert("Alloc'd more/less than needed", dir->count == dir->max_nodes);
+	mu_assert("Alloc'd more/less than needed", dir->count == dir->max_nodes - 2);
 
 	init_listing(&dir, path2);
 
 	mu_assert("test_init_listing 2 not alloc'd", dir);
 	mu_assert("test_init_listing 2 not properly init'd", dir->path && dir->tree);
-	mu_assert("Alloc'd less 2 than needed", dir->count <= dir->max_nodes);
+	mu_assert("Alloc'd less 2 than needed", dir->count <= dir->max_nodes - 2);
 
 	free_listing(&dir);
-	/* TODO check count, sel_idx, max_nodes */
 	return NULL;
 }
 

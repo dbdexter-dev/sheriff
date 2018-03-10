@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include "minunit.h"
 
 #include "../src/utils.c"
@@ -96,7 +97,7 @@ test_tohuman()
 	unsigned long i;
 	char buf[10];
 
-	for (i=0; i<=(long)1<<63; i *= 18) {
+	for (i=0; i<LONG_MAX; i *= 18) {
 		tohuman(i, buf);
 		mu_assert("test_tohuman size f'd up", strlen(buf) <= 6);
 		i++;

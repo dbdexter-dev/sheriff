@@ -15,10 +15,13 @@
 
 #include <stdio.h>
 
+static int  m_include_hidden = 1;
+
+static int  is_dot_or_dotdot(char *name);
 static int  populate_tree(Direntry *dir, const char *path);
 static int  quicksort_pass(Fileentry* *dir, int istart, int iend);
-static void quicksort(Fileentry* *dir, int istart, int iend);
-static void tree_xchg(Fileentry* *tree, int a, int b);
+static void quicksort(Fileentry **dir, int istart, int iend);
+static void tree_xchg(Fileentry **tree, int a, int b);
 static int  sort_tree(Direntry *dir);
 
 /* Mark all files in a direntry tree as not selected */
@@ -32,6 +35,12 @@ clear_dir_selection(Direntry *direntry)
 	}
 
 	return 0;
+}
+
+void
+dir_toggle_hidden()
+{
+	m_include_hidden ^= 1;
 }
 
 /* Free memory associated with a tree */
@@ -196,6 +205,13 @@ try_select(Direntry *direntry, int idx, int mark)
 }
 
 /* Static functions {{{*/
+/* Check if a directory is "." or ".." more efficiently than calling strcmp
+ * twice */
+inline int
+is_dot_or_dotdot(char *name)
+{
+	return (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')));
+}
 /* Populate a Fileentry list with a directory listing */
 int
 populate_tree(Direntry *dir, const char *path)
@@ -210,7 +226,9 @@ populate_tree(Direntry *dir, const char *path)
 	entries = 0;
 	if ((dp = opendir(path))) {
 		while ((ep = readdir(dp))) {
-			entries++;
+			if (m_include_hidden || ep->d_name[0] != '.') {
+				entries++;
+			}
 		}
 		closedir(dp);
 		dir->count = entries;
@@ -218,8 +236,8 @@ populate_tree(Direntry *dir, const char *path)
 	} else {
 		if (!(dir->tree)) {
 			dir->tree = safealloc(sizeof(*(dir->tree)));
-			memset(dir->tree, '\0', sizeof(*(dir->tree)));
 		}
+
 		dir->tree[0]->size = -1;
 		dir->tree[0]->mode = 0;
 		switch (errno) {
@@ -264,31 +282,40 @@ populate_tree(Direntry *dir, const char *path)
 	/* Populate the directory listing */
 	if ((dp = opendir(path))) {
 		for (i = 0; i < entries; i++) {
-			ep = readdir(dp);
-			/* Populate the first struct fields */
-			strcpy(dir->tree[i]->name, ep->d_name);
 
-			/* Allocate space for the concatenation <path>/<filename> */
-			tmp = safealloc(sizeof(*tmp) * (strlen(path) +
-			                                strlen(dir->tree[i]->name) +
-			                                1 + 1));
-			sprintf(tmp, "%s/%s", path, dir->tree[i]->name);
+			do {
+				ep = readdir(dp);
+			} while (!m_include_hidden && ep->d_name[0] == '.');
 
-			/* Get file stats */
-			lstat(tmp, &st);
+			if (is_dot_or_dotdot(ep->d_name)) {
+				entries--;
+				i--;
+				dir->count--;
+			} else {
+				/* Populate the first struct fields */
+				strcpy(dir->tree[i]->name, ep->d_name);
 
-			/* Populate the remaining struct fields */
-			dir->tree[i]->size = st.st_size;
-			dir->tree[i]->uid = st.st_uid;
-			dir->tree[i]->gid = st.st_gid;
-			dir->tree[i]->mode = st.st_mode;
-			dir->tree[i]->lastchange = st.st_mtim.tv_sec;
+				/* Allocate space for the concatenation <path>/<filename> */
+				tmp = safealloc(sizeof(*tmp) * (strlen(path) +
+												strlen(dir->tree[i]->name) +
+												1 + 1));
+				sprintf(tmp, "%s/%s", path, dir->tree[i]->name);
 
-			free(tmp);
+				/* Get file stats */
+				lstat(tmp, &st);
+
+				/* Populate the remaining struct fields */
+				dir->tree[i]->size = st.st_size;
+				dir->tree[i]->uid = st.st_uid;
+				dir->tree[i]->gid = st.st_gid;
+				dir->tree[i]->mode = st.st_mode;
+				dir->tree[i]->lastchange = st.st_mtim.tv_sec;
+
+				free(tmp);
+			}
 		}
 		closedir(dp);
 	} else {
-		memset(dir->tree, '\0', sizeof(*dir->tree));
 		dir->tree[0]->size = -1;
 		dir->tree[0]->mode = 0;
 		switch (errno) {
@@ -312,6 +339,13 @@ populate_tree(Direntry *dir, const char *path)
 
 		dir->count = 1;
 		return 1;
+	}
+
+	if (entries == 0) {
+		dir->tree[0]->size = -1;
+		dir->tree[0]->mode = 0;
+		strcpy(dir->tree[0]->name, "(empty)");
+		dir->count = 1;
 	}
 
 	return 0;
@@ -372,7 +406,6 @@ quicksort(Fileentry* *tree, int istart, int iend)
 	}
 	free(stack);
 }
-
 
 /* Alphabetically sort a directory listing, directories first
  * This looks ugly because I need to keep track of the element referencing

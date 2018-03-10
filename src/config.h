@@ -9,6 +9,8 @@ typedef struct {
 	char *cmd;
 } Assoc;
 
+static int pane_proportions[] = { 1, 4, 2 };
+
 static Assoc associations[] = {
 	{ ".pdf",   "zathura"},
 	{ ".c",     "nvim"},
@@ -65,6 +67,7 @@ static Key keys[] = {
 	{ '\t',         rel_tabswitch,      {.i = +1}},
 	{ 'x',          tab_delete,         {0}},
 	{ '',         refresh_all,        {0}},
+	{ 'H',          toggle_hidden,      {0}},
 /*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };

@@ -23,6 +23,6 @@ int  try_highlight(Dirview *view, int idx);
 void update_status_bottom(Dirview *win);
 void update_status_top(Dirview *win);
 int  windows_deinit(Dirview view[WIN_NR]);
-int  windows_init(Dirview view[WIN_NR], int w, int h, float main_perc);
+int  windows_init(Dirview view[WIN_NR], int w, int h, int pp[3]);
 
 #endif

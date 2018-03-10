@@ -1,8 +1,6 @@
 # Sheriff.c
 * Implement preview window
-* Reduce the number of #define directives
 * Enable top bar truncation a la fish
-* Allow traversing links if they link to directories
 * Allow for multiple files to be opened simultaneously
 * Keep the directory contents updated
 

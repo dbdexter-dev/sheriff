@@ -40,7 +40,7 @@ dialog(WINDOW *win, char *input, const char *msg, ...)
 void
 init_colors(void)
 {
-	init_pair(PAIR_RED_DEF, COLOR_RED, -1);
+	init_pair(PAIR_RED_DEF, COLOR_RED, COLOR_WHITE);
 	init_pair(PAIR_GREEN_DEF, COLOR_GREEN, -1);
 	init_pair(PAIR_BLUE_DEF, COLOR_BLUE, -1);
 	init_pair(PAIR_CYAN_DEF, COLOR_CYAN, -1);

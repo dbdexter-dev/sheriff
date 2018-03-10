@@ -67,6 +67,7 @@ static Key keys[] = {
 	{ '\t',         rel_tabswitch,      {.i = +1}},
 	{ 'x',          tab_delete,         {0}},
 	{ '',         refresh_all,        {0}},
+	{ 'H',          toggle_hidden,      {0}},
 /*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };

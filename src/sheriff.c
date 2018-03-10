@@ -54,6 +54,7 @@ static void  rel_tabswitch(const Arg *arg);
 static void  rename_cur(const Arg *arg);
 static void  tab_clone(const Arg *arg);
 static void  tab_delete(const Arg *arg);
+static void  toggle_hidden(const Arg *arg);
 static void  visualmode_toggle(const Arg *arg);
 static void  yank_cur(const Arg *arg);
 
@@ -337,6 +338,14 @@ rename_cur(const Arg *arg)
 		clip_exec(realdest);
 		free(realdest);
 	}
+}
+
+/* Toggle hidden files visibility, and queue a full screen redraw */
+void
+toggle_hidden(const Arg *arg)
+{
+	dir_toggle_hidden();
+	queue_update();
 }
 
 /* Toggle visual selection mode */

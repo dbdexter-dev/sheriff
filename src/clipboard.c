@@ -25,6 +25,12 @@ static Clipboard m_clip;
 static int clip_clear(Clipboard *clip);
 static void *pthr_clip_exec(void *arg);
 
+int
+clip_change_op(enum clip_ops op)
+{
+	m_clip.op = op;
+	return 0;
+}
 /* Deallocate a clipboard object */
 int
 clip_deinit()
@@ -136,6 +142,13 @@ pthr_clip_exec(void *arg)
 			}
 			break;
 		case OP_LINK:
+			for (i=0; i<clip->dir->count; i++) {
+				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
+				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
+				link_file(tmpsrc, tmpdest);
+				free(tmpsrc);
+				free(tmpdest);
+			}
 			break;
 		case OP_DELETE:
 			for (i=0; i<clip->dir->count; i++) {
@@ -154,7 +167,7 @@ pthr_clip_exec(void *arg)
 	pthread_mutex_unlock(&clip->mutex);
 	free(destpath);
 	/* Signal the main thread that the current directory contents have changed */
-	queue_master_update(UPDATE_DIRS);
+	queue_master_update();
 	/* arg was passed on the heap to prevent it being overwritten */
 	free(arg);
 	return NULL;

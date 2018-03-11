@@ -1,5 +1,4 @@
 #define _XOPEN_SOURCE 700
-#define _DEFAULT_SOURCE
 
 #include <assert.h>
 #include <dirent.h>
@@ -17,7 +16,9 @@
 static Progress m_progress;
 static unsigned enumerate_dir(char *path);
 static int      s_copy_file(char *src, char *dest);
+static int      s_delete_file(char *name);
 
+/* Accessory function to get the m_progress static global outside of here */
 Progress *
 fileop_progress()
 {
@@ -32,44 +33,18 @@ copy_file(char *src, char *dest)
 	return s_copy_file(src, dest);
 }
 
-/* Recursive deletion TODO: make this iterative */
 int
 delete_file(char *name)
 {
-	DIR *dp;
-	struct dirent *ep;
-	char *subpath;
-	struct stat st;
-
-	stat(name, &st);
-
-	/* Delete a directory's contents before attempting to delete the directory
-	 * itself */
-	if(S_ISDIR(st.st_mode)) {
-		if ((dp = opendir(name))) {
-			while ((ep = readdir(dp))) {
-				if (!is_dot_or_dotdot(ep->d_name)) {
-					subpath = join_path(name, ep->d_name);
-					delete_file(subpath);
-					free(subpath);
-				}
-			}
-			closedir(dp);
-		}
-	}
-
-	if (remove(name) < 0) {
-		return errno;
-	}
-
-	return 0;
+	m_progress.obj_count = enumerate_dir(name);
+	m_progress.obj_done = 0;
+	return s_delete_file(name);
 }
-
 
 int
 link_file(char *src, char *dest)
 {
-	if (symlink(dest, src) < 0) {
+	if (symlink(src, dest) < 0) {
 		return errno;
 	}
 	return 0;
@@ -103,20 +78,14 @@ enumerate_dir(char *path)
 		while ((ep = readdir(dp))) {
 			ret++;
 			if (!is_dot_or_dotdot(ep->d_name)) {
-				if (ep->d_type == DT_DIR) {
-					subpath = join_path(path, ep->d_name);
+				subpath = join_path(path, ep->d_name);
+				lstat(subpath, &st);
+
+				if (S_ISDIR(st.st_mode)) {
 					ret += enumerate_dir(subpath);
-					free(subpath);
-				} else if (ep->d_type == DT_UNKNOWN) {
-					subpath = join_path(path, ep->d_name);
-					lstat(subpath, &st);
-
-					if (S_ISDIR(st.st_mode)) {
-						ret += enumerate_dir(subpath);
-					}
-
-					free(subpath);
 				}
+
+				free(subpath);
 			}
 		}
 		closedir(dp);
@@ -155,7 +124,7 @@ s_copy_file(char *src, char *dest)
 						subpath_dest = join_path(dest, ep->d_name);
 
 						retval = s_copy_file(subpath_src, subpath_dest);
-						queue_master_update(UPDATE_ALL);
+						queue_master_update();
 
 						free(subpath_src);
 						free(subpath_dest);
@@ -165,7 +134,6 @@ s_copy_file(char *src, char *dest)
 			}
 		} else {
 			if ((out_fd = open(dest, O_WRONLY|O_CREAT, &st.st_mode)) >= 0) {
-/*				fchown(out_fd, st.st_uid, st.st_gid); */
 				if (sendfile(out_fd, in_fd, NULL, st.st_size) < 0) {
 					retval = errno;
 				} else {
@@ -183,4 +151,41 @@ s_copy_file(char *src, char *dest)
 
 	return retval;
 }
+
+/* Recursive deletion TODO: make this iterative */
+int
+s_delete_file(char *name)
+{
+	DIR *dp;
+	struct dirent *ep;
+	char *subpath;
+	struct stat st;
+
+	lstat(name, &st);
+	m_progress.fname = name;
+
+	/* Delete a directory's contents before attempting to delete the directory
+	 * itself */
+	if(S_ISDIR(st.st_mode) && (dp = opendir(name))) {
+		while ((ep = readdir(dp))) {
+			if (!is_dot_or_dotdot(ep->d_name)) {
+				subpath = join_path(name, ep->d_name);
+				s_delete_file(subpath);
+				free(subpath);
+			}
+		}
+		closedir(dp);
+	}
+	if (remove(name) < 0) {
+		return errno;
+	}
+
+	m_progress.obj_done++;
+	m_progress.fname = NULL;
+	queue_master_update();
+
+	return 0;
+}
+
+
 /*}}}*/

@@ -36,6 +36,8 @@ clear_dir_selection(Direntry *direntry)
 	return 0;
 }
 
+/* Toggle hidden files visibility, or rather, whether we should keep them in the
+ * tree array from now on */
 void
 dir_toggle_hidden()
 {
@@ -438,6 +440,7 @@ sort_tree(Direntry *dir)
 	return 0;
 }
 
+/* Just because I don't like seeing this too much knowing that xchg exists */
 inline void
 tree_xchg(Fileentry* *tree, int a, int b)
 {

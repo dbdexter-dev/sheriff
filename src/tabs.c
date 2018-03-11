@@ -42,6 +42,8 @@ tabctx_append(const char *path)
 	return 0;
 }
 
+/* Retun the idxth tab context in the linked list, taking the liberty to update
+ * idx in case it is out of range */
 TabCtx *
 tabctx_by_idx(int *idx)
 {
@@ -79,6 +81,9 @@ tabctx_deinit()
 	return 0;
 }
 
+/* Get the m_ctx linked list out of this file. This shouldn't be used by
+ * anything but the update_status_top function, since it has to know all the
+ * tabs that are open */
 TabCtx*
 tabctx_get()
 {
@@ -120,6 +125,7 @@ tabctx_remove(int idx)
 }
 
 /* Static functions {{{ */
+/* Free a tab context */
 int
 tabctx_free(TabCtx *ctx)
 {

@@ -35,11 +35,11 @@ typedef struct {
 
 char *realpath(const char *path, char *resolved_path);
 
+static int   abs_tabswitch(int idx);
 static int   direct_cd(char *center_path);
 static int   enter_directory();
 static int   exit_directory();
 static void  resize_handler();
-static int   tab_select(int idx);
 static void  update_reaper();
 static void  xdg_open(Direntry *file);
 
@@ -48,6 +48,7 @@ static void  abs_highlight(const Arg *arg);
 static void  chain(const Arg *arg);
 static void  delete_cur(const Arg *arg);
 static void  filesearch(const Arg *arg);
+static void  link_cur(const Arg *arg);
 static void  navigate(const Arg *arg);
 static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
@@ -68,10 +69,8 @@ static void  yank_cur(const Arg *arg);
 static Dirview m_view[WIN_NR];
 static int cur_tab = 0;
 static sem_t m_update_sem;
-static enum update_types  m_update_type;
 
 /* Keybind handlers {{{*/
-
 /* Select an element in the center view by absolute index */
 void
 abs_highlight(const Arg *arg)
@@ -127,6 +126,18 @@ abs_highlight(const Arg *arg)
 	update_status_bottom(m_view + BOT);
 
 	return;
+}
+
+/* Switch to the idxth tab */
+int
+abs_tabswitch(int idx)
+{
+	TabCtx *switch_dest;
+
+	switch_dest = tabctx_by_idx(&idx);
+	tab_switch(m_view, switch_dest);
+
+	return idx;
 }
 
 void
@@ -195,6 +206,12 @@ filesearch(const Arg *arg)
 	}
 }
 
+void
+link_cur(const Arg *arg)
+{
+	clip_change_op(OP_LINK);
+	paste_cur(NULL);
+}
 
 /* Meta-keybinding function, so that you can chain multiple characters together
  * to perform a single action */
@@ -303,7 +320,7 @@ quick_cd(const Arg *arg)
 void
 refresh_all(const Arg *arg)
 {
-	queue_master_update(UPDATE_DIRS);
+	queue_master_update();
 }
 
 /* Highlight a file in the center window given an offset from the currently
@@ -330,14 +347,14 @@ rel_highlight(const Arg *arg)
 void
 rel_tabswitch(const Arg *arg)
 {
-	cur_tab = tab_select(cur_tab - arg->i);
+	cur_tab = abs_tabswitch(cur_tab - arg->i);
 }
 
 /* Rename the currently highlighted file */
 void
 rename_cur(const Arg *arg)
 {
-	char dest[256];
+	char dest[NAME_MAX+1];
 	char *realdest;
 
 	/* TODO this will change once bulkrename is implemented */
@@ -360,7 +377,7 @@ void
 toggle_hidden(const Arg *arg)
 {
 	dir_toggle_hidden();
-	queue_master_update(UPDATE_DIRS);
+	queue_master_update();
 }
 
 /* Toggle visual selection mode */
@@ -471,16 +488,9 @@ exit_directory()
 
 /* Signal the updater that it has something to do on the next check */
 void
-queue_master_update(enum update_types t)
+queue_master_update()
 {
-	int val;
-
-	m_update_type = t;
-
-	sem_getvalue(&m_update_sem, &val);
-	if (val < 1) {
-		sem_post(&m_update_sem);
-	}
+	sem_post(&m_update_sem);
 }
 
 /* Handler that takes care of resizing the subviews when KEY_RESIZE is received.
@@ -531,22 +541,8 @@ resize_handler()
 	update_status_bottom(m_view + BOT);
 }
 
-/* Switch to the idxth tab */
-int
-tab_select(int idx)
-{
-	TabCtx *switch_dest;
-
-	switch_dest = tabctx_by_idx(&idx);
-	tab_switch(m_view, switch_dest);
-
-	return idx;
-}
-
-
 /* The core updater function, it gets called periodically and checks whether a
- * worker has done something in the background and has requested a current
- * directory rescan */
+ * worker has done something in the background that requires a screen update */
 void
 update_reaper()
 {
@@ -554,23 +550,20 @@ update_reaper()
 	Fileentry *centersel;
 
 	if (!sem_trywait(&m_update_sem)) {
-/*		if (m_update_type == UPDATE_DIRS || m_update_type == UPDATE_ALL) { */
-			rescan_pane(m_view[LEFT].ctx);
-			rescan_pane(m_view[CENTER].ctx);
-			centersel = m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx];
-			if (S_ISDIR(centersel->mode)) {
-				path = join_path(m_view[CENTER].ctx->dir->path, centersel->name);
-				init_pane_with_path(m_view[RIGHT].ctx, path);
-				free(path);
-			} else {
-				init_pane_with_path(m_view[RIGHT].ctx, NULL);
-			}
-			render_tree(m_view + LEFT, 0);
-			render_tree(m_view + CENTER, 1);
-			render_tree(m_view + RIGHT, 0);
-/*		} else if (m_update_type == UPDATE_STATUS || m_update_type == UPDATE_ALL) { */
-			update_status_bottom(m_view + BOT);
-/*		} */
+		rescan_pane(m_view[LEFT].ctx);
+		rescan_pane(m_view[CENTER].ctx);
+		centersel = m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx];
+		if (S_ISDIR(centersel->mode)) {
+			path = join_path(m_view[CENTER].ctx->dir->path, centersel->name);
+			init_pane_with_path(m_view[RIGHT].ctx, path);
+			free(path);
+		} else {
+			init_pane_with_path(m_view[RIGHT].ctx, NULL);
+		}
+		render_tree(m_view + LEFT, 0);
+		render_tree(m_view + CENTER, 1);
+		render_tree(m_view + RIGHT, 0);
+		update_status_bottom(m_view + BOT);
 	}
 }
 
@@ -668,7 +661,7 @@ main(int argc, char *argv[])
 	tabctx_append(path);
 	free(path);
 
-	tab_select(0);
+	abs_tabswitch(0);
 	/* Main control loop */
 	while ((ch = wgetch(m_view[BOT].win)) != 'q') {
 		/* Call the function associated with the key pressed */

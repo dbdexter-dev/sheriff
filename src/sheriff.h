@@ -8,6 +8,6 @@ enum update_types {
 	UPDATE_ALL
 };
 
-void queue_master_update(enum update_types type);
+void queue_master_update();
 
 #endif

@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 700
+
 #include <assert.h>
 #include <dirent.h>
 #include <locale.h>
@@ -13,6 +15,7 @@
 #include "dir.h"
 #include "clipboard.h"
 #include "ncutils.h"
+#include "sheriff.h"
 #include "tabs.h"
 #include "ui.h"
 #include "utils.h"
@@ -35,7 +38,6 @@ char *realpath(const char *path, char *resolved_path);
 static int   direct_cd(char *center_path);
 static int   enter_directory();
 static int   exit_directory();
-static void  queue_update();
 static void  resize_handler();
 static int   tab_select(int idx);
 static void  update_reaper();
@@ -66,6 +68,7 @@ static void  yank_cur(const Arg *arg);
 static Dirview m_view[WIN_NR];
 static int cur_tab = 0;
 static sem_t m_update_sem;
+static enum update_types  m_update_type;
 
 /* Keybind handlers {{{*/
 
@@ -133,13 +136,11 @@ delete_cur(const Arg *arg)
 	dialog(m_view[BOT].win, ans,
 	       "Are you sure you want to delete all the selected files? (yes/no) ");
 
-	if ((ans[0] & 0xDF) == 'Y' || ans[0] == '\n') {
+	if ((ans[0] & 0xDF) == 'Y' || ans[0] == '\0') {
 		clip_update(m_view[CENTER].ctx->dir, OP_DELETE);
 		clear_dir_selection(m_view[CENTER].ctx->dir);
 		m_view[CENTER].ctx->visual = 0;
 		clip_exec(m_view[CENTER].ctx->dir->path);
-		dialog(m_view[BOT].win, NULL, "Deleting...");
-		render_tree(m_view + CENTER, 1);
 	}
 }
 
@@ -281,10 +282,6 @@ paste_cur(const Arg *arg)
 
 	clip_exec(dir->path);
 	m_view[CENTER].ctx->visual = 0;
-
-	dialog(m_view[BOT].win, NULL, "Selection pasted");
-
-	render_tree(m_view + CENTER, 1);
 }
 
 /* Cd into a specific directory directly */
@@ -306,7 +303,7 @@ quick_cd(const Arg *arg)
 void
 refresh_all(const Arg *arg)
 {
-	queue_update();
+	queue_master_update(UPDATE_DIRS);
 }
 
 /* Highlight a file in the center window given an offset from the currently
@@ -363,7 +360,7 @@ void
 toggle_hidden(const Arg *arg)
 {
 	dir_toggle_hidden();
-	queue_update();
+	queue_master_update(UPDATE_DIRS);
 }
 
 /* Toggle visual selection mode */
@@ -474,10 +471,16 @@ exit_directory()
 
 /* Signal the updater that it has something to do on the next check */
 void
-queue_update()
+queue_master_update(enum update_types t)
 {
-	sem_post(&m_update_sem);
-	return;
+	int val;
+
+	m_update_type = t;
+
+	sem_getvalue(&m_update_sem, &val);
+	if (val < 1) {
+		sem_post(&m_update_sem);
+	}
 }
 
 /* Handler that takes care of resizing the subviews when KEY_RESIZE is received.
@@ -547,13 +550,27 @@ tab_select(int idx)
 void
 update_reaper()
 {
+	char *path;
+	Fileentry *centersel;
+
 	if (!sem_trywait(&m_update_sem)) {
-		rescan_listing(m_view[LEFT].ctx->dir);
-		rescan_listing(m_view[CENTER].ctx->dir);
-		rescan_listing(m_view[RIGHT].ctx->dir);
-		render_tree(m_view + LEFT, 0);
-		render_tree(m_view + CENTER, 1);
-		render_tree(m_view + RIGHT, 0);
+/*		if (m_update_type == UPDATE_DIRS || m_update_type == UPDATE_ALL) { */
+			rescan_pane(m_view[LEFT].ctx);
+			rescan_pane(m_view[CENTER].ctx);
+			centersel = m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx];
+			if (S_ISDIR(centersel->mode)) {
+				path = join_path(m_view[CENTER].ctx->dir->path, centersel->name);
+				init_pane_with_path(m_view[RIGHT].ctx, path);
+				free(path);
+			} else {
+				init_pane_with_path(m_view[RIGHT].ctx, NULL);
+			}
+			render_tree(m_view + LEFT, 0);
+			render_tree(m_view + CENTER, 1);
+			render_tree(m_view + RIGHT, 0);
+/*		} else if (m_update_type == UPDATE_STATUS || m_update_type == UPDATE_ALL) { */
+			update_status_bottom(m_view + BOT);
+/*		} */
 	}
 }
 
@@ -628,15 +645,10 @@ main(int argc, char *argv[])
 	int i, max_row, max_col;
 	char *path;
 	wchar_t ch;
-	struct sigaction update_act;
 
 	setlocale(LC_ALL, "");                 /* Enable unicode goodness */
 	clip_init();                           /* Initialize clipboard */
 	sem_init(&m_update_sem, 0, 0);         /* Initialize the update semaphore */
-	update_act.sa_handler = queue_update;
-	sigemptyset(&update_act.sa_mask);
-	update_act.sa_flags = 0;
-	sigaction(SIGUSR1, &update_act, NULL); /* Allow children to ask for an update */
 
 	/* Initialize ncurses */
 	initscr();                             /* Initialize ncurses screen */

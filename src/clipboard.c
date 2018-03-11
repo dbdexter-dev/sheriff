@@ -1,4 +1,5 @@
 #define _XOPEN_SOURCE 700
+
 #include <pthread.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -8,6 +9,8 @@
 #include <unistd.h>
 #include "clipboard.h"
 #include "dir.h"
+#include "fileops.h"
+#include "sheriff.h"
 #include "utils.h"
 #include "ui.h"
 
@@ -20,8 +23,6 @@ struct pthr_clip_arg {
 static Clipboard m_clip;
 
 static int clip_clear(Clipboard *clip);
-static int move_file(char *src, char *dest, int preserve_src);
-static int delete_file(char *fname);
 static void *pthr_clip_exec(void *arg);
 
 /* Deallocate a clipboard object */
@@ -55,7 +56,7 @@ clip_exec(char *destpath)
 	pthread_attr_init(&wt_attr);
 	pthread_attr_setdetachstate(&wt_attr, PTHREAD_CREATE_DETACHED);
 
-	pthread_sigmask(SIG_BLOCK, &wt_sigset, &wt_old_sigset);
+	pthread_sigmask(SIG_SETMASK, &wt_sigset, &wt_old_sigset);
 	pthread_create(&thr, &wt_attr, pthr_clip_exec, arg);
 	pthread_sigmask(SIG_SETMASK, &wt_old_sigset, NULL);
 
@@ -100,61 +101,12 @@ clip_clear(Clipboard *clip)
 	return 0;
 }
 
-/* Perma-delete a file */
-int
-delete_file(char *fname)
-{
-	pid_t pid;
-	int wstatus;
-
-	if (!fname) {
-		return -1;
-	}
-
-	if (!(pid = fork())) {
-		execlp("/bin/rm", "/bin/rm", fname, NULL);
-		exit(0);
-	} else if (pid < 0) {
-		return -1;
-	} else {
-		waitpid(pid, &wstatus, 0);
-	}
-
-	return 0;
-}
-
-/* Copy and move in a single function */
-int
-move_file(char *dest, char *src, int preserve_src)
-{
-	pid_t pid;
-	int wstatus;
-
-	if (!src || !dest) {
-		return -1;
-	}
-
-	if (!(pid = fork())) {
-		if (preserve_src) {
-			execlp("/bin/cp", "/bin/cp", "-rn",  src, dest, NULL);
-		} else {
-			execlp("/bin/mv", "/bin/mv", "-n",  src, dest, NULL);
-		}
-		exit(0);
-	} else if (pid < 0) {
-		return -1;
-	} else {
-		waitpid(pid, &wstatus, 0);
-	}
-
-	return 0;
-}
 /* Execute the action specified in a clipboard over the files in the clipboard */
 void *
 pthr_clip_exec(void *arg)
 {
 	int i;
-	char *tmppath;
+	char *tmpsrc, *tmpdest;
 	Clipboard *clip;
 	char *destpath;
 
@@ -167,25 +119,29 @@ pthr_clip_exec(void *arg)
 		switch(clip->op) {
 		case OP_COPY:
 			for (i=0; i<clip->dir->count; i++) {
-				tmppath = join_path(clip->dir->path, clip->dir->tree[i]->name);
-				move_file(destpath, tmppath, 1);
-				free(tmppath);
+				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
+				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
+				copy_file(tmpsrc, tmpdest);
+				free(tmpsrc);
+				free(tmpdest);
 			}
 			break;
 		case OP_MOVE:
 			for (i=0; i<clip->dir->count; i++) {
-				tmppath = join_path(clip->dir->path, clip->dir->tree[i]->name);
-				move_file(destpath, tmppath, 0);
-				free(tmppath);
+				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
+				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
+				move_file(tmpsrc, tmpdest);
+				free(tmpsrc);
+				free(tmpdest);
 			}
 			break;
 		case OP_LINK:
 			break;
 		case OP_DELETE:
 			for (i=0; i<clip->dir->count; i++) {
-				tmppath = join_path(clip->dir->path, clip->dir->tree[i]->name);
-				delete_file(tmppath);
-				free(tmppath);
+				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
+				delete_file(tmpsrc);
+				free(tmpsrc);
 			}
 			break;
 		case OP_RENAME:
@@ -198,7 +154,7 @@ pthr_clip_exec(void *arg)
 	pthread_mutex_unlock(&clip->mutex);
 	free(destpath);
 	/* Signal the main thread that the current directory contents have changed */
-	kill(0, SIGUSR1);
+	queue_master_update(UPDATE_DIRS);
 	/* arg was passed on the heap to prevent it being overwritten */
 	free(arg);
 	return NULL;

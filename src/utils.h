@@ -8,6 +8,7 @@
 #include <stdlib.h>
 
 void  die(const char *msg);
+int   is_dot_or_dotdot(char *name);
 char *join_path(const char *parent, const char *child);
 void  octal_to_str(int oct, char str[]);
 void *safealloc(size_t s);

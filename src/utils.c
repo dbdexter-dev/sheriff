@@ -15,6 +15,14 @@ die(const char *msg)
 	exit(1);
 }
 
+/* Check if a directory is "." or ".." more efficiently than calling strcmp
+ * twice */
+int
+is_dot_or_dotdot(char *name)
+{
+	return (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')));
+}
+
 /* Given a parent directory and a file in it, concatenate them to create a full
  * path. XXX: remember to free the returned pointer in the callee */
 char*

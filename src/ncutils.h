@@ -8,7 +8,7 @@
 #include "backend.h"
 
 #define MAXCMDLEN 128
-#define UPD_INTERVAL 100
+#define UPD_INTERVAL 30
 
 /* Convenient enum to address a specific view in main_view */
 enum windows {

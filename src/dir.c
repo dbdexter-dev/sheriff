@@ -17,7 +17,6 @@
 
 static int  m_include_hidden = 1;
 
-static int  is_dot_or_dotdot(char *name);
 static int  populate_tree(Direntry *dir, const char *path);
 static int  quicksort_pass(Fileentry* *dir, int istart, int iend);
 static void quicksort(Fileentry **dir, int istart, int iend);
@@ -205,13 +204,6 @@ try_select(Direntry *direntry, int idx, int mark)
 }
 
 /* Static functions {{{*/
-/* Check if a directory is "." or ".." more efficiently than calling strcmp
- * twice */
-inline int
-is_dot_or_dotdot(char *name)
-{
-	return (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')));
-}
 /* Populate a Fileentry list with a directory listing */
 int
 populate_tree(Direntry *dir, const char *path)

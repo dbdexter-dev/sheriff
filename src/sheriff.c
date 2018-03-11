@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 700
+
 #include <assert.h>
 #include <dirent.h>
 #include <locale.h>
@@ -13,6 +15,7 @@
 #include "dir.h"
 #include "clipboard.h"
 #include "ncutils.h"
+#include "sheriff.h"
 #include "tabs.h"
 #include "ui.h"
 #include "utils.h"
@@ -32,19 +35,20 @@ typedef struct {
 
 char *realpath(const char *path, char *resolved_path);
 
+static int   abs_tabswitch(int idx);
 static int   direct_cd(char *center_path);
 static int   enter_directory();
 static int   exit_directory();
-static void  queue_update();
 static void  resize_handler();
-static int   tab_select(int idx);
 static void  update_reaper();
 static void  xdg_open(Direntry *file);
 
 /* Functions that can be used in config.h */
 static void  abs_highlight(const Arg *arg);
 static void  chain(const Arg *arg);
+static void  delete_cur(const Arg *arg);
 static void  filesearch(const Arg *arg);
+static void  link_cur(const Arg *arg);
 static void  navigate(const Arg *arg);
 static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
@@ -67,7 +71,6 @@ static int cur_tab = 0;
 static sem_t m_update_sem;
 
 /* Keybind handlers {{{*/
-
 /* Select an element in the center view by absolute index */
 void
 abs_highlight(const Arg *arg)
@@ -125,6 +128,33 @@ abs_highlight(const Arg *arg)
 	return;
 }
 
+/* Switch to the idxth tab */
+int
+abs_tabswitch(int idx)
+{
+	TabCtx *switch_dest;
+
+	switch_dest = tabctx_by_idx(&idx);
+	tab_switch(m_view, switch_dest);
+
+	return idx;
+}
+
+void
+delete_cur(const Arg *arg)
+{
+	char ans[16];
+	dialog(m_view[BOT].win, ans,
+	       "Are you sure you want to delete all the selected files? (yes/no) ");
+
+	if ((ans[0] & 0xDF) == 'Y' || ans[0] == '\0') {
+		clip_update(m_view[CENTER].ctx->dir, OP_DELETE);
+		clear_dir_selection(m_view[CENTER].ctx->dir);
+		m_view[CENTER].ctx->visual = 0;
+		clip_exec(m_view[CENTER].ctx->dir->path);
+	}
+}
+
 /* File search, both forwards and backwards, depending on the value of arg->i */
 void
 filesearch(const Arg *arg)
@@ -176,6 +206,12 @@ filesearch(const Arg *arg)
 	}
 }
 
+void
+link_cur(const Arg *arg)
+{
+	clip_change_op(OP_LINK);
+	paste_cur(NULL);
+}
 
 /* Meta-keybinding function, so that you can chain multiple characters together
  * to perform a single action */
@@ -263,10 +299,6 @@ paste_cur(const Arg *arg)
 
 	clip_exec(dir->path);
 	m_view[CENTER].ctx->visual = 0;
-
-	dialog(m_view[BOT].win, NULL, "Selection pasted");
-
-	render_tree(m_view + CENTER, 1);
 }
 
 /* Cd into a specific directory directly */
@@ -288,7 +320,7 @@ quick_cd(const Arg *arg)
 void
 refresh_all(const Arg *arg)
 {
-	queue_update();
+	queue_master_update();
 }
 
 /* Highlight a file in the center window given an offset from the currently
@@ -315,14 +347,14 @@ rel_highlight(const Arg *arg)
 void
 rel_tabswitch(const Arg *arg)
 {
-	cur_tab = tab_select(cur_tab - arg->i);
+	cur_tab = abs_tabswitch(cur_tab - arg->i);
 }
 
 /* Rename the currently highlighted file */
 void
 rename_cur(const Arg *arg)
 {
-	char dest[256];
+	char dest[NAME_MAX+1];
 	char *realdest;
 
 	/* TODO this will change once bulkrename is implemented */
@@ -345,7 +377,7 @@ void
 toggle_hidden(const Arg *arg)
 {
 	dir_toggle_hidden();
-	queue_update();
+	queue_master_update();
 }
 
 /* Toggle visual selection mode */
@@ -456,10 +488,9 @@ exit_directory()
 
 /* Signal the updater that it has something to do on the next check */
 void
-queue_update()
+queue_master_update()
 {
 	sem_post(&m_update_sem);
-	return;
 }
 
 /* Handler that takes care of resizing the subviews when KEY_RESIZE is received.
@@ -510,32 +541,29 @@ resize_handler()
 	update_status_bottom(m_view + BOT);
 }
 
-/* Switch to the idxth tab */
-int
-tab_select(int idx)
-{
-	TabCtx *switch_dest;
-
-	switch_dest = tabctx_by_idx(&idx);
-	tab_switch(m_view, switch_dest);
-
-	return idx;
-}
-
-
 /* The core updater function, it gets called periodically and checks whether a
- * worker has done something in the background and has requested a current
- * directory rescan */
+ * worker has done something in the background that requires a screen update */
 void
 update_reaper()
 {
+	char *path;
+	Fileentry *centersel;
+
 	if (!sem_trywait(&m_update_sem)) {
-		rescan_listing(m_view[LEFT].ctx->dir);
-		rescan_listing(m_view[CENTER].ctx->dir);
-		rescan_listing(m_view[RIGHT].ctx->dir);
+		rescan_pane(m_view[LEFT].ctx);
+		rescan_pane(m_view[CENTER].ctx);
+		centersel = m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx];
+		if (S_ISDIR(centersel->mode)) {
+			path = join_path(m_view[CENTER].ctx->dir->path, centersel->name);
+			init_pane_with_path(m_view[RIGHT].ctx, path);
+			free(path);
+		} else {
+			init_pane_with_path(m_view[RIGHT].ctx, NULL);
+		}
 		render_tree(m_view + LEFT, 0);
 		render_tree(m_view + CENTER, 1);
 		render_tree(m_view + RIGHT, 0);
+		update_status_bottom(m_view + BOT);
 	}
 }
 
@@ -610,15 +638,10 @@ main(int argc, char *argv[])
 	int i, max_row, max_col;
 	char *path;
 	wchar_t ch;
-	struct sigaction update_act;
 
 	setlocale(LC_ALL, "");                 /* Enable unicode goodness */
 	clip_init();                           /* Initialize clipboard */
 	sem_init(&m_update_sem, 0, 0);         /* Initialize the update semaphore */
-	update_act.sa_handler = queue_update;
-	sigemptyset(&update_act.sa_mask);
-	update_act.sa_flags = 0;
-	sigaction(SIGUSR1, &update_act, NULL); /* Allow children to ask for an update */
 
 	/* Initialize ncurses */
 	initscr();                             /* Initialize ncurses screen */
@@ -638,7 +661,7 @@ main(int argc, char *argv[])
 	tabctx_append(path);
 	free(path);
 
-	tab_select(0);
+	abs_tabswitch(0);
 	/* Main control loop */
 	while ((ch = wgetch(m_view[BOT].win)) != 'q') {
 		/* Call the function associated with the key pressed */

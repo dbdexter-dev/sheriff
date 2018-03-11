@@ -28,11 +28,19 @@ static Key c_multi[] = {
 
 static Key d_multi[] = {
 	{ 'd',          yank_cur,           {.i = 0}},
+	{ 'D',          delete_cur,         {.i = 0}},
 	{ '\0',         NULL,               {0}},
 };
 
 static Key g_multi[] = {
 	{ 'g',          abs_highlight,      {.i = 0}},
+	{ '\0',         NULL,               {0}},
+};
+
+static Key p_multi[] = {
+	{ 'p',          paste_cur,          {0}},
+	{ 'l',          link_cur,           {0}},
+	{ '\0',         NULL,               {0}},
 };
 
 static Key y_multi[] = {
@@ -61,7 +69,7 @@ static Key keys[] = {
 	{ 'c',          chain,              {.v = c_multi}},
 	{ 'g',          chain,              {.v = g_multi}},
 	{ 'G',          abs_highlight,      {.i = -1}},
-	{ 'p',          paste_cur,          {0}},
+	{ 'p',          chain,              {.v = p_multi}},
 	{ 'v',          visualmode_toggle,  {0}},
 	{ '',         tab_clone,          {0}},
 	{ '\t',         rel_tabswitch,      {.i = +1}},

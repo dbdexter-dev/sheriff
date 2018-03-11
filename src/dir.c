@@ -17,7 +17,6 @@
 
 static int  m_include_hidden = 1;
 
-static int  is_dot_or_dotdot(char *name);
 static int  populate_tree(Direntry *dir, const char *path);
 static int  quicksort_pass(Fileentry* *dir, int istart, int iend);
 static void quicksort(Fileentry **dir, int istart, int iend);
@@ -37,6 +36,8 @@ clear_dir_selection(Direntry *direntry)
 	return 0;
 }
 
+/* Toggle hidden files visibility, or rather, whether we should keep them in the
+ * tree array from now on */
 void
 dir_toggle_hidden()
 {
@@ -205,13 +206,6 @@ try_select(Direntry *direntry, int idx, int mark)
 }
 
 /* Static functions {{{*/
-/* Check if a directory is "." or ".." more efficiently than calling strcmp
- * twice */
-inline int
-is_dot_or_dotdot(char *name)
-{
-	return (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')));
-}
 /* Populate a Fileentry list with a directory listing */
 int
 populate_tree(Direntry *dir, const char *path)
@@ -446,6 +440,7 @@ sort_tree(Direntry *dir)
 	return 0;
 }
 
+/* Just because I don't like seeing this too much knowing that xchg exists */
 inline void
 tree_xchg(Fileentry* *tree, int a, int b)
 {

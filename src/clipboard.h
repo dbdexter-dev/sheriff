@@ -23,11 +23,12 @@ typedef struct filebuffer {
 } Filebuffer;
 
 typedef struct {
-	int op;
+	enum clip_ops op;
 	Direntry* dir;
 	pthread_mutex_t mutex;
 } Clipboard;
 
+int clip_change_op(enum clip_ops op);
 int clip_deinit();
 int clip_exec(char *destpath);
 int clip_init();

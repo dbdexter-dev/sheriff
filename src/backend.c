@@ -118,6 +118,10 @@ int
 rescan_pane(PaneCtx *ctx)
 {
 	rescan_listing(ctx->dir);
+	if (ctx->dir->sel_idx > ctx->dir->count) {
+		ctx->dir->sel_idx = 0;
+		ctx->offset = 0;
+	}
 	return 0;
 }
 

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "backend.h"
+#include "fileops.h"
 #include "ncutils.h"
 #include "ui.h"
 #include "utils.h"
@@ -158,8 +159,11 @@ update_status_bottom(Dirview *win)
 	char mode[10+1];
 	struct tm *mtime;
 	const Fileentry *sel;
+	Progress *pr;
+	int barlen;
 
 	sel = win->ctx->dir->tree[win->ctx->dir->sel_idx];
+	pr = fileop_progress();
 
 	mtime = localtime(&sel->lastchange);
 	strftime(last_mod, MAXDATELEN, "%F %R", mtime);
@@ -170,6 +174,13 @@ update_status_bottom(Dirview *win)
 	mvwprintw(win->win, 0, 0, "%s ", mode);
 	wattrset(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
 	wprintw(win->win," %d  %d  %s", sel->uid, sel->gid, last_mod);
+	if (pr->fname) {
+		wprintw(win->win, " %s", pr->fname);
+		barlen = (pr->obj_done / (float)pr->obj_count) * getmaxx(win->win);
+		wmove(win->win, 0, 0);
+		wattrset(win->win, A_REVERSE);
+		wchgat(win->win, barlen, A_REVERSE, PAIR_GREEN_DEF, NULL);
+	}
 
 	wrefresh(win->win);
 }

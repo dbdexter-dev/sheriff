@@ -28,6 +28,7 @@ static Key c_multi[] = {
 
 static Key d_multi[] = {
 	{ 'd',          yank_cur,           {.i = 0}},
+	{ 'D',          delete_cur,         {.i = 0}},
 	{ '\0',         NULL,               {0}},
 };
 

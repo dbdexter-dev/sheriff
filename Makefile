@@ -16,7 +16,7 @@ src:
 	$(MAKE) -C $@
 tests:
 	$(MAKE) -C $@
-strip:
+strip: src
 	strip src/sheriff
 
 clean:

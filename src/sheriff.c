@@ -44,6 +44,7 @@ static void  xdg_open(Direntry *file);
 /* Functions that can be used in config.h */
 static void  abs_highlight(const Arg *arg);
 static void  chain(const Arg *arg);
+static void  delete_cur(const Arg *arg);
 static void  filesearch(const Arg *arg);
 static void  navigate(const Arg *arg);
 static void  paste_cur(const Arg *arg);
@@ -123,6 +124,23 @@ abs_highlight(const Arg *arg)
 	update_status_bottom(m_view + BOT);
 
 	return;
+}
+
+void
+delete_cur(const Arg *arg)
+{
+	char ans[16];
+	dialog(m_view[BOT].win, ans,
+	       "Are you sure you want to delete all the selected files? (yes/no) ");
+
+	if ((ans[0] & 0xDF) == 'Y' || ans[0] == '\n') {
+		clip_update(m_view[CENTER].ctx->dir, OP_DELETE);
+		clear_dir_selection(m_view[CENTER].ctx->dir);
+		m_view[CENTER].ctx->visual = 0;
+		clip_exec(m_view[CENTER].ctx->dir->path);
+		dialog(m_view[BOT].win, NULL, "Deleting...");
+		render_tree(m_view + CENTER, 1);
+	}
 }
 
 /* File search, both forwards and backwards, depending on the value of arg->i */

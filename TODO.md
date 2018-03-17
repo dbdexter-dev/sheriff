@@ -1,8 +1,12 @@
 # Sheriff.c
 * Implement preview window
-* Enable top bar truncation a la fish
 * Allow for multiple files to be opened simultaneously
-* Keep the directory contents updated
+* Chmod
+
+# Clipboard.c
+* Fix progress bar glitches when multiple file operations are carried out at the
+  same time
+* Preserve selection between directory redraws
 
 # Config.h
 * Add highlighting options

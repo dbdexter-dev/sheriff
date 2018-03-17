@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 700
-
 #include <assert.h>
 #include <dirent.h>
 #include <locale.h>
@@ -12,8 +10,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "backend.h"
-#include "dir.h"
 #include "clipboard.h"
+#include "dir.h"
 #include "ncutils.h"
 #include "sheriff.h"
 #include "tabs.h"
@@ -160,11 +158,14 @@ void
 filesearch(const Arg *arg)
 {
 	int i, found;
-	char fname[MAXSEARCHLEN+1];
+	static char fname[MAXSEARCHLEN+1];
 	char *fullpath;
 	const Direntry *dir = m_view[CENTER].ctx->dir;
 
-	dialog(m_view[BOT].win, fname, arg->i > 0 ? "/" : "?");
+	if (arg->i == 1 || arg->i == -1) {
+		dialog(m_view[BOT].win, fname, arg->i > 0 ? "/" : "?");
+	}
+
 	if (*fname == '\0') {
 		return;
 	}
@@ -490,7 +491,12 @@ exit_directory()
 void
 queue_master_update()
 {
-	sem_post(&m_update_sem);
+	int sem_val;
+
+	sem_getvalue(&m_update_sem, &sem_val);
+	if (sem_val < 1) {
+		sem_post(&m_update_sem);
+	}
 }
 
 /* Handler that takes care of resizing the subviews when KEY_RESIZE is received.

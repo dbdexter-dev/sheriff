@@ -1,11 +1,10 @@
-#define _XOPEN_SOURCE 700
-
+#include <assert.h>
 #include <pthread.h>
 #include <signal.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include "clipboard.h"
 #include "dir.h"
@@ -22,8 +21,9 @@ struct pthr_clip_arg {
 
 static Clipboard m_clip;
 
-static int clip_clear(Clipboard *clip);
-static void *pthr_clip_exec(void *arg);
+static int  clip_clear(Clipboard *clip);
+static int  clip_clone(Clipboard *dest, Clipboard *src);
+static void* pthr_clip_exec(void *arg);
 
 int
 clip_change_op(enum clip_ops op)
@@ -51,9 +51,10 @@ clip_exec(char *destpath)
 	sigset_t wt_sigset, wt_old_sigset;
 
 	arg = safealloc(sizeof(*arg));
-	arg->clip = &m_clip;
-	arg->destpath = safealloc(sizeof(*arg->destpath) * (strlen(destpath) + 1));
 
+	arg->clip = safealloc(sizeof(Clipboard));
+	clip_clone(arg->clip, &m_clip);
+	arg->destpath = safealloc(sizeof(*arg->destpath) * (strlen(destpath) + 1));
 	sprintf(arg->destpath, "%s", destpath);
 
 	sigemptyset(&wt_sigset);
@@ -107,19 +108,30 @@ clip_clear(Clipboard *clip)
 	return 0;
 }
 
+int
+clip_clone(Clipboard *dest, Clipboard *src)
+{
+	dest->op = src->op;
+
+	pthread_mutex_lock(&src->mutex);
+	assert(!snapshot_tree_selected(&dest->dir, src->dir));
+	pthread_mutex_unlock(&src->mutex);
+
+	return 0;
+}
+
 /* Execute the action specified in a clipboard over the files in the clipboard */
 void *
 pthr_clip_exec(void *arg)
 {
-	int i;
+	int i, status;
 	char *tmpsrc, *tmpdest;
 	Clipboard *clip;
 	char *destpath;
 
 	clip = ((struct pthr_clip_arg*)arg)->clip;
 	destpath = ((struct pthr_clip_arg*)arg)->destpath;
-
-	pthread_mutex_lock(&clip->mutex);
+	status = 0;
 
 	if (clip->dir) {
 		switch(clip->op) {
@@ -127,7 +139,7 @@ pthr_clip_exec(void *arg)
 			for (i=0; i<clip->dir->count; i++) {
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
-				copy_file(tmpsrc, tmpdest);
+				status |= copy_file(tmpsrc, tmpdest);
 				free(tmpsrc);
 				free(tmpdest);
 			}
@@ -136,7 +148,7 @@ pthr_clip_exec(void *arg)
 			for (i=0; i<clip->dir->count; i++) {
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
-				move_file(tmpsrc, tmpdest);
+				status |= move_file(tmpsrc, tmpdest);
 				free(tmpsrc);
 				free(tmpdest);
 			}
@@ -145,7 +157,7 @@ pthr_clip_exec(void *arg)
 			for (i=0; i<clip->dir->count; i++) {
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
-				link_file(tmpsrc, tmpdest);
+				status |= link_file(tmpsrc, tmpdest);
 				free(tmpsrc);
 				free(tmpdest);
 			}
@@ -153,7 +165,7 @@ pthr_clip_exec(void *arg)
 		case OP_DELETE:
 			for (i=0; i<clip->dir->count; i++) {
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
-				delete_file(tmpsrc);
+				status |= delete_file(tmpsrc);
 				free(tmpsrc);
 			}
 			break;
@@ -164,11 +176,12 @@ pthr_clip_exec(void *arg)
 		}
 	}
 
-	pthread_mutex_unlock(&clip->mutex);
 	free(destpath);
 	/* Signal the main thread that the current directory contents have changed */
 	queue_master_update();
 	/* arg was passed on the heap to prevent it being overwritten */
+	free_listing(&clip->dir);
+	free(clip);
 	free(arg);
 	return NULL;
 }

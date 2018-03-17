@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 700
-
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
@@ -13,10 +11,11 @@
 #include "sheriff.h"
 #include "utils.h"
 
-static Progress m_progress;
 static unsigned enumerate_dir(char *path);
 static int      s_copy_file(char *src, char *dest);
 static int      s_delete_file(char *name);
+
+static Progress m_progress;
 
 /* Accessory function to get the m_progress static global outside of here */
 Progress *
@@ -28,17 +27,43 @@ fileop_progress()
 int
 copy_file(char *src, char *dest)
 {
-	m_progress.obj_count = enumerate_dir(src);
+	int copy_status, obj_count;
+
+	obj_count = enumerate_dir(src);
+	m_progress.obj_count = obj_count;
 	m_progress.obj_done = 0;
-	return s_copy_file(src, dest);
+
+	copy_status = s_copy_file(src, dest);
+
+	switch (copy_status) {
+	case ENOMEM:    /* 4 intentional fallthroughs */
+	case EINVAL:
+	case EOVERFLOW:
+	case EIO:
+		delete_file(dest);
+		break;
+	default:
+		break;
+	}
+
+	m_progress.fname = NULL;
+
+	return 0;
 }
 
 int
 delete_file(char *name)
 {
-	m_progress.obj_count = enumerate_dir(name);
+	int obj_count;
+
+	obj_count = enumerate_dir(name);
+	m_progress.obj_count = obj_count;
 	m_progress.obj_done = 0;
-	return s_delete_file(name);
+
+	s_delete_file(name);
+
+	m_progress.fname = NULL;
+	return 0;
 }
 
 int
@@ -73,11 +98,11 @@ enumerate_dir(char *path)
 	char *subpath;
 	unsigned ret;
 
-	ret = 0;
+	ret = 1;
 	if ((dp = opendir(path))) {
 		while ((ep = readdir(dp))) {
-			ret++;
 			if (!is_dot_or_dotdot(ep->d_name)) {
+				ret++;
 				subpath = join_path(path, ep->d_name);
 				lstat(subpath, &st);
 
@@ -117,6 +142,7 @@ s_copy_file(char *src, char *dest)
 			close(in_fd);
 			mkdir(dest, st.st_mode);
 			m_progress.obj_done++;
+
 			if ((dp = opendir(src))) {
 				while ((ep = readdir(dp))) {
 					if (!is_dot_or_dotdot(ep->d_name)) {
@@ -124,6 +150,17 @@ s_copy_file(char *src, char *dest)
 						subpath_dest = join_path(dest, ep->d_name);
 
 						retval = s_copy_file(subpath_src, subpath_dest);
+						/* Clean up the mess if the copy failed */
+						switch (retval) {
+						case ENOMEM:    /* 4 intentional fallthroughs */
+						case EINVAL:
+						case EOVERFLOW:
+						case EIO:
+							delete_file(subpath_dest);
+							break;
+						default:
+							break;
+						}
 						queue_master_update();
 
 						free(subpath_src);
@@ -142,9 +179,9 @@ s_copy_file(char *src, char *dest)
 
 				m_progress.obj_done++;
 				close(out_fd);
-				close(in_fd);
 			}
 		}
+		close(in_fd);
 	}
 
 	m_progress.fname = NULL;
@@ -176,12 +213,12 @@ s_delete_file(char *name)
 		}
 		closedir(dp);
 	}
+
 	if (remove(name) < 0) {
 		return errno;
 	}
 
 	m_progress.obj_done++;
-	m_progress.fname = NULL;
 	queue_master_update();
 
 	return 0;

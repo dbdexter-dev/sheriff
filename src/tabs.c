@@ -35,7 +35,9 @@ tabctx_append(const char *path)
 	init_pane_with_path(ptr->left, tmp);
 	free(tmp);
 	init_pane_with_path(ptr->center, path);
-	init_pane_with_path(ptr->right, path);
+	tmp = join_path(path, ptr->center->dir->tree[0]->name);
+	init_pane_with_path(ptr->right, tmp);
+	free(tmp);
 
 	m_tabcount++;
 

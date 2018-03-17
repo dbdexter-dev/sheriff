@@ -8,11 +8,12 @@
 #include <stdlib.h>
 
 void  die(const char *msg);
+void  fish_trunc(char *str);
 int   is_dot_or_dotdot(char *name);
-char *join_path(const char *parent, const char *child);
+char* join_path(const char *parent, const char *child);
 void  octal_to_str(int oct, char str[]);
-void *safealloc(size_t s);
-char *strcasestr(const char *haystack, const char *needle);
+void* safealloc(size_t s);
+char* strcasestr(const char *haystack, const char *needle);
 int   strchomp(const char *src, char *dest, const int maxlen);
 void  tohuman(unsigned long bytes, char *human);
 

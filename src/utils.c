@@ -5,8 +5,8 @@
 #include <sys/stat.h>
 #include "utils.h"
 
-
 static int toupper(int c);
+
 /* Die atrociously when something bad happens */
 void
 die(const char *msg)
@@ -15,12 +15,46 @@ die(const char *msg)
 	exit(1);
 }
 
+/* Compress a string, truncating like the fish shell does as a default */
+void
+fish_trunc(char *str)
+{
+	int i, last_slash;
+	char *truncd;
+
+	/* There's a trailing slash most of the time */
+	last_slash = strlen(str) - 2;
+	for (; str[last_slash] != '/' && last_slash > 0; last_slash--)
+		;
+
+	truncd=str;
+	i=0;
+
+	while (i < last_slash) {
+		*(truncd++) = str[i++];
+		*(truncd++) = str[i];
+
+		if (str[i++] == '.') {
+			*(truncd++) = str[i++];
+		}
+
+		for (; str[i] != '/' && i < last_slash; i++)
+			;
+	}
+
+	for (; str[i] != '\0'; i++) {
+		*(truncd++) = str[i];
+	}
+
+	*(truncd) = '\0';
+}
+
 /* Check if a directory is "." or ".." more efficiently than calling strcmp
  * twice */
 int
-is_dot_or_dotdot(char *name)
+is_dot_or_dotdot(char *fn)
 {
-	return (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')));
+	return (fn[0] == '.' && (fn[1] == '\0' || (fn[1] == '.' && fn[2] == '\0')));
 }
 
 /* Given a parent directory and a file in it, concatenate them to create a full
@@ -86,7 +120,7 @@ safealloc(size_t s)
 }
 
 /* Compare two strings case-insensitively */
-char *
+char*
 strcasestr(const char *haystack, const char *needle)
 {
 	int i;

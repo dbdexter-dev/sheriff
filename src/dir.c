@@ -1,8 +1,8 @@
-#include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -12,8 +12,6 @@
 #include <unistd.h>
 #include "dir.h"
 #include "utils.h"
-
-#include <stdio.h>
 
 static int  m_include_hidden = 1;
 
@@ -81,7 +79,9 @@ free_listing(Direntry **direntry)
 int
 init_listing(Direntry **direntry, const char *path)
 {
-	assert(direntry);
+	if (!direntry) {
+		return -1;
+	}
 
 	if (!(*direntry)) {
 		/* Fully initialize the Direntry struct */
@@ -132,10 +132,7 @@ snapshot_tree_selected(Direntry **dest, Direntry *src)
 	int i, j, select_count;
 	Direntry *d;
 
-	assert(src);
-	assert(dest);
-
-	if (!src->tree) {
+	if (!src || !dest || !src->tree) {
 		return -1;
 	}
 
@@ -148,24 +145,25 @@ snapshot_tree_selected(Direntry **dest, Direntry *src)
 		}
 	}
 
+	if (!select_count) {
+		return 0;
+	}
+
 	*dest = safealloc(sizeof(**dest));
 	d = *dest;
 
-	if (src->tree || !select_count) {
-		d->count = select_count;
-		d->sel_idx = 0;
-		d->max_nodes = select_count;
+	d->count = select_count;
+	d->sel_idx = 0;
+	d->max_nodes = select_count;
+	d->path = safealloc(sizeof(*(d->path)) * (strlen(src->path) + 1));
+	strcpy(d->path, src->path);
 
-		d->path = safealloc(sizeof(*(d->path)) * (strlen(src->path) + 1));
-		strcpy(d->path, src->path);
-
-		d->tree = safealloc(sizeof(*(d->tree)) * select_count);
-		for (i=0, j=0; i<src->count; i++) {
-			if (src->tree[i]->selected) {
-				d->tree[j] = safealloc(sizeof(*(d->tree[0])));
-				memcpy(d->tree[j], src->tree[i], sizeof(*(src->tree[0])));
-				j++;
-			}
+	d->tree = safealloc(sizeof(*(d->tree)) * select_count);
+	for (i=0, j=0; j<select_count; i++) {
+		if (src->tree[i]->selected) {
+			d->tree[j] = safealloc(sizeof(*(d->tree[0])));
+			memcpy(d->tree[j], src->tree[i], sizeof(*(src->tree[0])));
+			j++;
 		}
 	}
 

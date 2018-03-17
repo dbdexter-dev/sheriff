@@ -198,7 +198,7 @@ update_status_top(Dirview *win)
 
 	user = getenv("USER");
 	cur_off = getmaxx(win->win);
-	wd = win->ctx->dir->path;
+	wd = join_path(win->ctx->dir->path, "");
 	gethostname(hostn, MAXHOSTNLEN);
 	hi = win->ctx->dir->tree[win->ctx->dir->sel_idx]->name;
 
@@ -211,7 +211,9 @@ update_status_top(Dirview *win)
 	wattron(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
 	mvwprintw(win->win, 0, 0, "%s@%s", user, hostn);
 	wattron(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
-	wprintw(win->win, " %s/", wd);
+	fish_trunc(wd);
+	wprintw(win->win, " %s", wd);
+	free(wd);
 	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
 	wprintw(win->win, "%s", hi);
 

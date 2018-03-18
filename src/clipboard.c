@@ -125,10 +125,14 @@ void *
 pthr_clip_exec(void *arg)
 {
 	int i, status;
+	mode_t mode;
 	char *tmpsrc, *tmpdest;
 	Clipboard *clip;
 	char *destpath;
 
+	/* NOTE: destpath here is improperly named, as it can also contain the
+	 * permissions to give to the files coded in octal. This isn't too bad,
+	 * since a chmod doesn't need a destpath */
 	clip = ((struct pthr_clip_arg*)arg)->clip;
 	destpath = ((struct pthr_clip_arg*)arg)->destpath;
 	status = 0;
@@ -169,7 +173,15 @@ pthr_clip_exec(void *arg)
 				free(tmpsrc);
 			}
 			break;
-		case OP_RENAME:
+		case OP_CHMOD:
+			mode = atoo(destpath);
+			if (mode > 0) {
+				for (i=0; i<clip->dir->count; i++) {
+					tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
+					status |= chmod_file(tmpsrc, mode);
+					free(tmpsrc);
+				}
+			}
 			break;
 		default:
 			break;

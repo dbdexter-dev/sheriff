@@ -7,6 +7,21 @@
 
 static int toupper(int c);
 
+int
+atoo(const char *str)
+{
+	unsigned octal;
+
+	for (; *str != '\0'; str++) {
+		if (*str < '0' || *str > '9') {
+			return -1;
+		}
+		octal = (octal << 3) + (*str - '0');
+	}
+
+	return octal;
+}
+
 /* Die atrociously when something bad happens */
 void
 die(const char *msg)

@@ -6,6 +6,7 @@
 #define FILEOPS_H
 
 #include <pthread.h>
+#include <fcntl.h>
 #include "dir.h"
 
 enum clip_ops {
@@ -13,7 +14,7 @@ enum clip_ops {
 	OP_MOVE,
 	OP_LINK,
 	OP_DELETE,
-	OP_RENAME
+	OP_CHMOD
 };
 
 typedef struct filebuffer {

@@ -12,6 +12,7 @@
 #include "utils.h"
 
 static unsigned enumerate_dir(char *path);
+static int      s_chmod_file(char *name, mode_t mode);
 static int      s_copy_file(char *src, char *dest);
 static int      s_delete_file(char *name);
 
@@ -25,12 +26,23 @@ fileop_progress()
 }
 
 int
+chmod_file(char *name, mode_t mode)
+{
+	m_progress.obj_count = enumerate_dir(name);
+	m_progress.obj_done = 0;
+
+	s_chmod_file(name, mode);
+
+	m_progress.fname = NULL;
+	return 0;
+}
+
+int
 copy_file(char *src, char *dest)
 {
-	int copy_status, obj_count;
+	int copy_status;
 
-	obj_count = enumerate_dir(src);
-	m_progress.obj_count = obj_count;
+	m_progress.obj_count = enumerate_dir(src);
 	m_progress.obj_done = 0;
 
 	copy_status = s_copy_file(src, dest);
@@ -54,10 +66,7 @@ copy_file(char *src, char *dest)
 int
 delete_file(char *name)
 {
-	int obj_count;
-
-	obj_count = enumerate_dir(name);
-	m_progress.obj_count = obj_count;
+	m_progress.obj_count = enumerate_dir(name);
 	m_progress.obj_done = 0;
 
 	s_delete_file(name);
@@ -117,6 +126,34 @@ enumerate_dir(char *path)
 	}
 
 	return ret;
+}
+
+/* Recursive chmodding of a directory and its children. Possible TODO: add an
+ * option to just chmod the top level */
+int
+s_chmod_file(char *name, mode_t mode)
+{
+	char *subpath;
+	struct stat st;
+	DIR *dp;
+	struct dirent *ep;
+
+	lstat(name, &st);
+	chmod(name, mode);
+	m_progress.obj_done++;
+
+	if (S_ISDIR(st.st_mode) && (dp = opendir(name))) {
+		while ((ep = readdir(dp))) {                /* Self-call on subnodes */
+			if (!is_dot_or_dotdot(ep->d_name)) {    /* Except for . and .. */
+				subpath = join_path(name, ep->d_name);
+				s_chmod_file(subpath, mode);
+				free(subpath);
+			}
+		}
+		closedir(dp);   /* Don't forget to pick up the trash on your way out! */
+	}
+
+	return 0;
 }
 
 /* Recursive copying TODO: make this iterative */

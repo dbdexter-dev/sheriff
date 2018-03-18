@@ -9,7 +9,7 @@
 * Preserve selection between directory redraws
 
 # Config.h
-* Add highlighting options
+* Add file extension based highlighting options
 
 # Dir.c/Backend.c
 * Implement directory list caching

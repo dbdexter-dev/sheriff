@@ -44,6 +44,7 @@ static void  xdg_open(Direntry *file);
 /* Functions that can be used in config.h */
 static void  abs_highlight(const Arg *arg);
 static void  chain(const Arg *arg);
+static void  chmod_cur(const Arg *arg);
 static void  delete_cur(const Arg *arg);
 static void  filesearch(const Arg *arg);
 static void  link_cur(const Arg *arg);
@@ -241,6 +242,19 @@ chain(const Arg *arg)
 	wtimeout(m_view[BOT].win, UPD_INTERVAL);
 }
 
+void
+chmod_cur(const Arg *arg)
+{
+	char modestr[MAXCMDLEN+1];  /* Oversized, I know... */
+	dialog(m_view[BOT].win, modestr, "chmod: ");
+
+	if (modestr[0] != '\0') {
+		clip_update(m_view[CENTER].ctx->dir, OP_CHMOD);
+		m_view[CENTER].ctx->visual = 0;
+		clip_exec(modestr);
+	}
+}
+
 /* Handle navigation, either forward or backwards, through directories or
  * files */
 void
@@ -420,7 +434,9 @@ direct_cd(char *path)
 		status |= init_pane_with_path(m_view[LEFT].ctx, fullpath);
 		free(fullpath);
 		status |= init_pane_with_path(m_view[CENTER].ctx, path);
-		status |= init_pane_with_path(m_view[RIGHT].ctx, path);
+		fullpath = join_path(path, m_view[CENTER].ctx->dir->tree[0]->name);
+		status |= init_pane_with_path(m_view[RIGHT].ctx, fullpath);
+		free(fullpath);
 
 		status |= render_tree(m_view + LEFT, 0);
 		status |= render_tree(m_view + CENTER, 1);

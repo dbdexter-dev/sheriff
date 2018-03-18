@@ -233,7 +233,7 @@ update_status_top(Dirview *win)
 		if (tab_fullname[i] != '\0') {
 			strchomp(tab_fullname+i, tabname, TABNAME_MAX);
 			cur_off -= strlen(tabname) + 1;
-			mvwprintw(win->win, 0, cur_off, "%s", tabname);
+			mvwprintw(win->win, 0, cur_off + 1, "%s", tabname);
 		} else {
 			cur_off -= 2;
 			mvwprintw(win->win, 0, cur_off, "/");

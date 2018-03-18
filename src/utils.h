@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 
+int   atoo(const char *str);
 void  die(const char *msg);
 void  fish_trunc(char *str);
 int   is_dot_or_dotdot(char *name);

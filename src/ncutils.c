@@ -64,5 +64,4 @@ change_highlight(WINDOW *win, int oidx, int nidx)
 	wchgat(win, -1, attr, PAIR_NUMBER(attr), NULL);
 
 	wmove(win, savedrow, savedcol);
-	return;
 }

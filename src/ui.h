@@ -1,6 +1,12 @@
 /**
- * Functions that sit between a Dirview's WINDOW and its other members
+ * The meat of the ui work is handled in here. There's functions that render all
+ * kinds of UI elements, functions that update offsets and allow tab switches.
+ * One thing worth noting is that all of these functions are strictly to be used
+ * by the main thread, since bsically all ncurses operations are not
+ * thread-safe, so using them inside a child thread would result in garbled
+ * output at best, and segfaults at worst.
  */
+
 #ifndef UI_H
 #define UI_H
 

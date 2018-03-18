@@ -7,6 +7,7 @@
 
 static int toupper(int c);
 
+/* Given a string containing an octal-coded integer, extract said int value */
 int
 atoo(const char *str)
 {

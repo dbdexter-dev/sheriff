@@ -31,6 +31,8 @@ tabctx_append(const char *path)
 	memset(ptr->center, '\0', sizeof(*ptr->center));
 	memset(ptr->right, '\0', sizeof(*ptr->right));
 
+	/* Initialize left with ${path}/../, center with ${path}, right with
+	 * ${path}/${center[0]}, if this makes any sense */
 	tmp = join_path(path, "../");
 	init_pane_with_path(ptr->left, tmp);
 	free(tmp);
@@ -40,7 +42,6 @@ tabctx_append(const char *path)
 	free(tmp);
 
 	m_tabcount++;
-
 	return 0;
 }
 
@@ -57,8 +58,9 @@ tabctx_by_idx(int *idx)
 	if (i < 0) {
 		i += m_tabcount;
 	}
-
 	*idx = i;
+
+	/* Count tabs until the idxth one is reached */
 	for (retval = m_ctx; i > 0; i--) {
 		retval = retval->next;
 	}

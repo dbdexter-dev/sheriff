@@ -38,37 +38,34 @@ render_tree(Dirview *win, int show_sizes)
 
 	assert(win->ctx->dir->tree);
 
-	getmaxyx(win->win, mr, mc);
+	getmaxyx(win->win, mr, mc);         /* Get screen bounds */
 
-	/* Go to the top corner */
-	werase(win->win);
+	werase(win->win);                   /* Go to the top corner */
 	wmove(win->win, 0, 0);
 
 	/* Allocate enough space to fit the shortened listing names */
 	tmpstring = safealloc(sizeof(*tmpstring) * (mc + 1));
 
-	/* Update window offsets if necessary */
-	check_offset_changed(win);
+	check_offset_changed(win);          /* Update window offsets if necessary */
 
 	/* Read up to $mr entries */
 	for (i = ctx->offset; i < ctx->dir->count && (i - ctx->offset) < mr; i++) {
 		tmpfile = ctx->dir->tree[i];
 
-		if (tmpfile->selected) {
+		if (tmpfile->selected) {        /* If visually selected, mark it */
 			wattrset(win->win, COLOR_PAIR(PAIR_YELLOW_DEF) | A_BOLD);
-		} else {
-			/* Change color based on the entry type */
+		} else {                        /* Change color based on entry type */
 			switch (tmpfile->mode & S_IFMT) {
-			case 0:                 /* Not a file */
+			case 0:                     /* Not a file */
 				wattrset(win->win, COLOR_PAIR(PAIR_RED_DEF));
 				break;
-			case S_IFLNK:
+			case S_IFLNK:               
 				wattrset(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
 				break;
 			case S_IFDIR:
 				wattrset(win->win, A_BOLD | COLOR_PAIR(PAIR_GREEN_DEF));
 				break;
-			case S_IFBLK:           /* All intentional fallthroughs */
+			case S_IFBLK:               /* 4 intentional fallthroughs */
 			case S_IFIFO:
 			case S_IFSOCK:
 			case S_IFCHR:
@@ -80,7 +77,7 @@ render_tree(Dirview *win, int show_sizes)
 				break;
 			}
 		}
-		/* Chomp string so that it fits in the window */
+		/* Chomp string so that it fits inside the window */
 		if (!show_sizes || tmpfile->size < 0) {
 			assert(!strchomp(tmpfile->name, tmpstring, mc-1));
 			wprintw(win->win, "%s\n", tmpstring);
@@ -93,7 +90,7 @@ render_tree(Dirview *win, int show_sizes)
 			mvwprintw(win->win, i - ctx->offset, mc - HUMANSIZE_LEN - 1,
 					  "%6s\n", humansize);
 		}
-		/* Higlight the element marked as selected in the dir tree */
+		/* Higlight the selected element in the dir listing */
 		if (i == ctx->dir->sel_idx) {
 			try_highlight(win, i - ctx->offset);
 		}
@@ -110,10 +107,11 @@ tab_switch(Dirview view[WIN_NR], const TabCtx *ctx)
 {
 	assert(view && ctx);
 
+	/* Correct the backend. Note that both bars refer to the same PaneCtx as the
+	 * center view */
 	view[LEFT].ctx = ctx->left;
 	view[CENTER].ctx = ctx->center;
 	view[RIGHT].ctx = ctx->right;
-
 	view[TOP].ctx = ctx->center;
 	view[BOT].ctx = ctx->center;
 
@@ -122,10 +120,10 @@ tab_switch(Dirview view[WIN_NR], const TabCtx *ctx)
 	rescan_pane(ctx->center);
 	rescan_pane(ctx->right);
 
+	/* Update the frontend */
 	render_tree(view+LEFT, 0);
 	render_tree(view+CENTER, 1);
 	render_tree(view+RIGHT, 0);
-
 	update_status_top(view+TOP);
 	update_status_bottom(view+BOT);
 
@@ -140,9 +138,8 @@ try_highlight(Dirview *win, int idx)
 	int row_nr;
 	PaneCtx *ctx;
 
-	ctx = win->ctx;
-
 	assert(win);
+	ctx = win->ctx;
 
 	row_nr = ctx->dir->sel_idx - ctx->offset;
 	/* Update the dir backend */
@@ -152,6 +149,7 @@ try_highlight(Dirview *win, int idx)
 	return idx;
 }
 
+/* Update the bottom status bar with all the relevant information */
 void
 update_status_bottom(Dirview *win)
 {
@@ -163,12 +161,14 @@ update_status_bottom(Dirview *win)
 	int barlen;
 
 	sel = win->ctx->dir->tree[win->ctx->dir->sel_idx];
-	pr = fileop_progress();
 
+	/* Gather some info */
+	pr = fileop_progress();
 	mtime = localtime(&sel->lastchange);
 	strftime(last_mod, MAXDATELEN, "%F %R", mtime);
 	octal_to_str(sel->mode, mode);
 
+	/* Display it on the screen */
 	werase(win->win);
 	wattrset(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
 	mvwprintw(win->win, 0, 0, "%s ", mode);
@@ -185,6 +185,7 @@ update_status_bottom(Dirview *win)
 	wrefresh(win->win);
 }
 
+/* Update the top bar with all the relevant information */
 void
 update_status_top(Dirview *win)
 {
@@ -194,8 +195,8 @@ update_status_top(Dirview *win)
 	int cur_off, i;
 	const TabCtx *tabs;
 
+	/* Gather some info */
 	tabs = tabctx_get();
-
 	user = getenv("USER");
 	cur_off = getmaxx(win->win);
 	wd = join_path(win->ctx->dir->path, "");
@@ -217,6 +218,7 @@ update_status_top(Dirview *win)
 	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
 	wprintw(win->win, "%s", hi);
 
+	/* Display tab names */
 	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));
 	for (; tabs != NULL; tabs = tabs->next) {
 		if (tabs->center == win->ctx) {

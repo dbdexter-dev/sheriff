@@ -13,17 +13,17 @@
 #include "dir.h"
 #include "utils.h"
 
-static int  m_include_hidden = 1;
-
 static void dir_set_error(Fileentry *dir);
-static int  populate_tree(Direntry *dir, const char *path);
-static int  quicksort_pass(Fileentry* *dir, int istart, int iend);
+static int  populate_listing(Direntry *dir, const char *path);
 static void quicksort(Fileentry **dir, int istart, int iend);
-static void tree_xchg(Fileentry **tree, int a, int b);
+static int  quicksort_pass(Fileentry* *dir, int istart, int iend);
 static int  sort_tree(Direntry *dir);
+static void tree_xchg(Fileentry **tree, int a, int b);
+
+static int  m_include_hidden = 1;   /* Should we show hidden files globally? */
 
 /* Mark all files in a direntry tree as not selected */
-int
+void
 clear_dir_selection(Direntry *direntry)
 {
 	int i;
@@ -31,19 +31,18 @@ clear_dir_selection(Direntry *direntry)
 	for (i=0; i<direntry->count; i++) {
 		direntry->tree[i]->selected = 0;
 	}
-
-	return 0;
 }
 
 /* Toggle hidden files visibility, or rather, whether we should keep them in the
- * tree array in every subsequent populate_tree() */
+ * tree array in every subsequent populate_listing() */
 void
 dir_toggle_hidden()
 {
 	m_include_hidden ^= 1;
 }
 
-/* Free memory associated with a tree */
+/* Free memory associated with a Direntry, marking it as not allocated once it
+ * has been fully deallocated */
 int
 free_listing(Direntry **direntry)
 {
@@ -80,29 +79,27 @@ free_listing(Direntry **direntry)
 int
 init_listing(Direntry **direntry, const char *path)
 {
-	if (!direntry) {
+	if (!direntry) {            /* Direntry must exist for this to make sense */
 		return -1;
 	}
 
-	if (!(*direntry)) {
-		/* Fully initialize the Direntry struct */
+	if (!(*direntry)) {         /* Fully initialize the Direntry struct */
 		*direntry = safealloc(sizeof(**direntry));
 		(*direntry)->max_nodes = 0;
 		(*direntry)->path = NULL;
-	} else {
-		/* Semi-initialize a dirty Direntry struct */
+	} else {                    /* Semi-initialize a dirty Direntry struct */
 		(*direntry)->count = 0;
 	}
 
-	if ((*direntry)->path) {
+	if ((*direntry)->path) {    /* Free the path if it isn't empty already */
 		free((*direntry)->path);
 	}
 
-	if (path) {
+	if (path) {                 /* If path isn't null, make a listing of it */
 		(*direntry)->path = realpath(path, NULL);
-		populate_tree(*direntry, path);
+		populate_listing(*direntry, path);
 		sort_tree(*direntry);
-	} else {
+	} else {                    /* If it is null, mark the tree as empty */
 		(*direntry)->path = NULL;
 	}
 
@@ -119,7 +116,7 @@ int
 rescan_listing(Direntry *direntry)
 {
 	if (direntry->path) {
-		populate_tree(direntry, direntry->path);
+		populate_listing(direntry, direntry->path);
 		sort_tree(direntry);
 		clear_dir_selection(direntry);
 	}
@@ -139,14 +136,14 @@ snapshot_tree_selected(Direntry **dest, Direntry *src)
 
 	src->tree[src->sel_idx]->selected = 1;
 
-	select_count = 0;
-	for (i=0; i<src->count; i++) {
+	/* Count the elemnts that are selected */
+	for (i=0, select_count=0; i<src->count; i++) {
 		if (src->tree[i]->selected) {
 			select_count++;
 		}
 	}
 
-	if (!select_count) {
+	if (!select_count) {    /* Return if there are no elements selected */
 		return 0;
 	}
 
@@ -173,8 +170,8 @@ snapshot_tree_selected(Direntry **dest, Direntry *src)
 	return 0;
 }
 
-/* Try to select the idxth element in the list, and return the index of the line
- * that was actually selected */
+/* Try to select the idxth element in the list, and return the index of the
+ * element that was actually selected */
 int
 try_select(Direntry *direntry, int idx, int mark)
 {
@@ -199,11 +196,9 @@ try_select(Direntry *direntry, int idx, int mark)
 		}
 	}
 
-
-	/* Update the sel pointer to the currently selected entry */
+	/* Update the sel pointer to the currently selected entry and return */
 	direntry->sel_idx = idx;
-
-	return direntry->sel_idx;
+	return idx;
 }
 
 /* Static functions {{{*/
@@ -239,7 +234,7 @@ dir_set_error(Fileentry *file)
 
 /* Populate a Fileentry list with a directory listing */
 int
-populate_tree(Direntry *dir, const char *path)
+populate_listing(Direntry *dir, const char *path)
 {
 	DIR *dp;
 	struct dirent *ep;
@@ -338,29 +333,6 @@ populate_tree(Direntry *dir, const char *path)
 	return 0;
 }
 
-/* Quicksort algorithm pass, center element is the pivot */
-int
-quicksort_pass(Fileentry* *tree, int istart, int iend)
-{
-	int i, r, pi;
-	char *pivot;
-
-	pi = (istart+iend)/2;
-	pivot = tree[pi]->name;
-	tree_xchg(tree, pi, iend);
-
-	r = istart;
-
-	for (i=istart; i < iend; i++) {
-		if (strcasecmp(tree[i]->name, pivot) < 0) {
-			tree_xchg(tree, i, r++);
-		}
-	}
-
-	tree_xchg(tree, r, iend);
-	return r;
-}
-
 /* Iterative implementation of quicksort */
 void
 quicksort(Fileentry* *tree, int istart, int iend)
@@ -395,6 +367,30 @@ quicksort(Fileentry* *tree, int istart, int iend)
 	}
 	free(stack);
 }
+
+/* Quicksort algorithm pass, center element is the pivot */
+int
+quicksort_pass(Fileentry* *tree, int istart, int iend)
+{
+	int i, r, pi;
+	char *pivot;
+
+	pi = (istart+iend)/2;
+	pivot = tree[pi]->name;
+	tree_xchg(tree, pi, iend);
+
+	r = istart;
+
+	for (i=istart; i < iend; i++) {
+		if (strcasecmp(tree[i]->name, pivot) < 0) {
+			tree_xchg(tree, i, r++);
+		}
+	}
+
+	tree_xchg(tree, r, iend);
+	return r;
+}
+
 
 /* Alphabetically sort a directory listing, directories first
  * This looks ugly because I need to keep track of the element referencing

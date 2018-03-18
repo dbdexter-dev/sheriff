@@ -1,3 +1,11 @@
+/**
+ * Functions that operate directly on files are defined here. Most of these are
+ * just wrappers around recursive, statically-defined functions in the companion
+ * .c file. The Progress struct is used to report to the main thread how far
+ * into an operation we are, as well as the name of the file currently being
+ * copied/deleted/linked/chmodded/you_name_it.
+ */
+
 #ifndef FILEOPS_H_MINE
 #define FILEOPS_H_MINE
 

@@ -2,6 +2,7 @@
  * User configuration file. Contains the various keybindings and file
  * associations (and possibily other options in the future)
  */
+
 #include <ncurses.h>
 
 typedef struct {

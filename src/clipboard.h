@@ -1,12 +1,14 @@
 /**
- * Functions dealing with moving/renaming/copying/linking files around and the
- * like. Also clipboard management.
+ * Functions that operate on a Clipboard struct are defined here.
+ * A Clipboard struct contains a snapshot of the files to operate on, as well as
+ * the operation to apply to these files. The mutex prevents things like a 
+ * deallocation from happening while a copy is in progress.
  */
+
 #ifndef FILEOPS_H
 #define FILEOPS_H
 
 #include <pthread.h>
-#include <fcntl.h>
 #include "dir.h"
 
 enum clip_ops {
@@ -16,12 +18,6 @@ enum clip_ops {
 	OP_DELETE,
 	OP_CHMOD
 };
-
-typedef struct filebuffer {
-	char *file;
-	int preserve_src;
-	struct filebuffer* next;
-} Filebuffer;
 
 typedef struct {
 	enum clip_ops op;

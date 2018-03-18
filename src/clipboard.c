@@ -1,6 +1,5 @@
 #include <assert.h>
 #include <pthread.h>
-#include <signal.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -19,18 +18,21 @@ struct pthr_clip_arg {
 	char *destpath;
 };
 
-static Clipboard m_clip;
-
 static int  clip_clear(Clipboard *clip);
 static int  clip_clone(Clipboard *dest, Clipboard *src);
 static void* pthr_clip_exec(void *arg);
 
+static Clipboard m_clip;
+
+/* Change the operation stored in the clipboard. Useful when a yank becomes a
+ * delete (aka yank_cur -> link_cur should make OP_COPY become OP_LINK) */
 int
 clip_change_op(enum clip_ops op)
 {
 	m_clip.op = op;
 	return 0;
 }
+
 /* Deallocate a clipboard object */
 int
 clip_deinit()
@@ -40,7 +42,6 @@ clip_deinit()
 	return 0;
 }
 
-
 /* Spawn a thread that will execute what the clipboard is holding */
 int
 clip_exec(char *destpath)
@@ -48,31 +49,23 @@ clip_exec(char *destpath)
 	struct pthr_clip_arg *arg;
 	pthread_attr_t wt_attr;
 	pthread_t thr;
-	sigset_t wt_sigset, wt_old_sigset;
 
 	arg = safealloc(sizeof(*arg));
 
-	arg->clip = safealloc(sizeof(Clipboard));
+	arg->clip = safealloc(sizeof(Clipboard));   /* Cobble up the thread args */
 	clip_clone(arg->clip, &m_clip);
 	arg->destpath = safealloc(sizeof(*arg->destpath) * (strlen(destpath) + 1));
 	sprintf(arg->destpath, "%s", destpath);
 
-	sigemptyset(&wt_sigset);
-	sigaddset(&wt_sigset, SIGUSR1);
-
-	pthread_attr_init(&wt_attr);
+	pthread_attr_init(&wt_attr);    /* Start the thread as a detached thread */
 	pthread_attr_setdetachstate(&wt_attr, PTHREAD_CREATE_DETACHED);
-
-	pthread_sigmask(SIG_SETMASK, &wt_sigset, &wt_old_sigset);
 	pthread_create(&thr, &wt_attr, pthr_clip_exec, arg);
-	pthread_sigmask(SIG_SETMASK, &wt_old_sigset, NULL);
-
 	pthread_attr_destroy(&wt_attr);
 
 	return 0;
 }
 
-/* Initialize a clipboard object */
+/* Initialize a clipboard object to null */
 int
 clip_init()
 {
@@ -94,7 +87,7 @@ clip_update(Direntry* dir, int op)
 }
 
 /* Static functions {{{*/
-/* Clear a clipboard */
+/* Clear a clipboard object */
 int
 clip_clear(Clipboard *clip)
 {
@@ -108,6 +101,7 @@ clip_clear(Clipboard *clip)
 	return 0;
 }
 
+/* Clone a clipboard */
 int
 clip_clone(Clipboard *dest, Clipboard *src)
 {
@@ -137,6 +131,10 @@ pthr_clip_exec(void *arg)
 	destpath = ((struct pthr_clip_arg*)arg)->destpath;
 	status = 0;
 
+	/* Execute whatever the clipboard is holding, on every file the clipboard is
+	 * holding. Yes, I could have done a single for loop; No, I don't think this
+	 * is bad. I'm actually reading clip->op only once instead of doing so in
+	 * every loop */
 	if (clip->dir) {
 		switch(clip->op) {
 		case OP_COPY:
@@ -174,7 +172,7 @@ pthr_clip_exec(void *arg)
 			}
 			break;
 		case OP_CHMOD:
-			mode = atoo(destpath);
+			mode = atoo(destpath);  /* Convert from octal string to int */
 			if (mode > 0) {
 				for (i=0; i<clip->dir->count; i++) {
 					tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);

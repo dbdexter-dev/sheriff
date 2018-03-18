@@ -128,6 +128,8 @@ enumerate_dir(char *path)
 	return ret;
 }
 
+/* Recursive chmodding of a directory and its children. Possible TODO: add an
+ * option to just chmod the top level */
 int
 s_chmod_file(char *name, mode_t mode)
 {
@@ -141,14 +143,14 @@ s_chmod_file(char *name, mode_t mode)
 	m_progress.obj_done++;
 
 	if (S_ISDIR(st.st_mode) && (dp = opendir(name))) {
-		while ((ep = readdir(dp))) {
-			if (!is_dot_or_dotdot(ep->d_name)) {
+		while ((ep = readdir(dp))) {                /* Self-call on subnodes */
+			if (!is_dot_or_dotdot(ep->d_name)) {    /* Except for . and .. */
 				subpath = join_path(name, ep->d_name);
 				s_chmod_file(subpath, mode);
 				free(subpath);
 			}
 		}
-		closedir(dp);
+		closedir(dp);   /* Don't forget to pick up the trash on your way out! */
 	}
 
 	return 0;

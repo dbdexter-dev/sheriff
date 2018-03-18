@@ -15,6 +15,7 @@
 
 static int  m_include_hidden = 1;
 
+static void dir_set_error(Fileentry *dir);
 static int  populate_tree(Direntry *dir, const char *path);
 static int  quicksort_pass(Fileentry* *dir, int istart, int iend);
 static void quicksort(Fileentry **dir, int istart, int iend);
@@ -35,7 +36,7 @@ clear_dir_selection(Direntry *direntry)
 }
 
 /* Toggle hidden files visibility, or rather, whether we should keep them in the
- * tree array from now on */
+ * tree array in every subsequent populate_tree() */
 void
 dir_toggle_hidden()
 {
@@ -152,12 +153,14 @@ snapshot_tree_selected(Direntry **dest, Direntry *src)
 	*dest = safealloc(sizeof(**dest));
 	d = *dest;
 
+	/* Copy tree metadata */
 	d->count = select_count;
 	d->sel_idx = 0;
 	d->max_nodes = select_count;
 	d->path = safealloc(sizeof(*(d->path)) * (strlen(src->path) + 1));
 	strcpy(d->path, src->path);
 
+	/* Copy tree members */
 	d->tree = safealloc(sizeof(*(d->tree)) * select_count);
 	for (i=0, j=0; j<select_count; i++) {
 		if (src->tree[i]->selected) {
@@ -204,6 +207,36 @@ try_select(Direntry *direntry, int idx, int mark)
 }
 
 /* Static functions {{{*/
+/* When any function fails to read a file attributes, it calls this function,
+ * which populates the Fileentry struct with a special value, signaling that
+ * it's not a valid file, and sets its name to communicate what kind of error
+ * happened */
+void
+dir_set_error(Fileentry *file)
+{
+	file->size = -1;
+	file->mode = 0;
+
+	switch(errno) {
+	case EACCES:
+		strcpy(file->name, "(permission denied)");
+		break;
+	case EIO:
+		strcpy(file->name, "(unreadable)");
+		break;
+	case EMFILE:        /* Intentional fallthrough */
+	case ENFILE:
+		strcpy(file->name, "(file descriptor limit reached)");
+		break;
+	case ENOMEM:
+		strcpy(file->name, "(out of memory)");
+		break;
+	default:
+		strcpy(file->name, "(on fire)");
+		break;
+	}
+}
+
 /* Populate a Fileentry list with a directory listing */
 int
 populate_tree(Direntry *dir, const char *path)
@@ -229,31 +262,11 @@ populate_tree(Direntry *dir, const char *path)
 		if (!(dir->tree)) {
 			dir->tree = safealloc(sizeof(*(dir->tree)));
 		}
-
-		dir->tree[0]->size = -1;
-		dir->tree[0]->mode = 0;
-		switch (errno) {
-		case EACCES:
-			strcpy(dir->tree[0]->name, "(permission denied)");
-			break;
-		case EIO:
-			strcpy(dir->tree[0]->name, "(unreadable)");
-			break;
-		case EMFILE:        /* Intentional fallthrough */
-		case ENFILE:
-			strcpy(dir->tree[0]->name, "(file descriptor limit reached)");
-			break;
-		case ENOMEM:
-			strcpy(dir->tree[0]->name, "(out of memory)");
-			break;
-		default:
-			strcpy(dir->tree[0]->name, "(on fire)");
-			break;
-		}
-
+		dir_set_error(dir->tree[0]);
 		dir->count = 1;
 		return 1;
 	}
+
 	/* Reallocte a chunk of memory to contain all the elements if we don't have
 	 * enough. Use realloc or malloc depending on whether the dir->tree array is
 	 * already initalized or not */
@@ -274,61 +287,43 @@ populate_tree(Direntry *dir, const char *path)
 	/* Populate the directory listing */
 	if ((dp = opendir(path))) {
 		for (i = 0; i < entries; i++) {
-
+			/* Read all the files in a directory, skipping the hidden ones if so
+			 * requested */
 			do {
 				ep = readdir(dp);
 			} while (!m_include_hidden && ep->d_name[0] == '.');
 
+			/* Discard . and .. */
 			if (is_dot_or_dotdot(ep->d_name)) {
 				entries--;
 				i--;
 				dir->count--;
 			} else {
-				/* Populate the first struct fields */
 				strcpy(dir->tree[i]->name, ep->d_name);
-
 				/* Allocate space for the concatenation <path>/<filename> */
 				tmp = safealloc(sizeof(*tmp) * (strlen(path) +
 												strlen(dir->tree[i]->name) +
 												1 + 1));
 				sprintf(tmp, "%s/%s", path, dir->tree[i]->name);
 
-				/* Get file stats */
-				lstat(tmp, &st);
-
-				/* Populate the remaining struct fields */
-				dir->tree[i]->size = st.st_size;
-				dir->tree[i]->uid = st.st_uid;
-				dir->tree[i]->gid = st.st_gid;
-				dir->tree[i]->mode = st.st_mode;
-				dir->tree[i]->lastchange = st.st_mtim.tv_sec;
+				/* Populate file stats, if this fails create an error entry
+				 * instead */
+				if (lstat(tmp, &st) < 0) {
+					dir_set_error(dir->tree[i]);
+				} else {
+					dir->tree[i]->size = st.st_size;
+					dir->tree[i]->uid = st.st_uid;
+					dir->tree[i]->gid = st.st_gid;
+					dir->tree[i]->mode = st.st_mode;
+					dir->tree[i]->lastchange = st.st_mtim.tv_sec;
+				}
 
 				free(tmp);
 			}
 		}
 		closedir(dp);
 	} else {
-		dir->tree[0]->size = -1;
-		dir->tree[0]->mode = 0;
-		switch (errno) {
-		case EACCES:
-			strcpy(dir->tree[0]->name, "(permission denied)");
-			break;
-		case EIO:
-			strcpy(dir->tree[0]->name, "(unreadable)");
-			break;
-		case EMFILE:        /* Intentional fallthrough */
-		case ENFILE:
-			strcpy(dir->tree[0]->name, "(file descriptor limit reached)");
-			break;
-		case ENOMEM:
-			strcpy(dir->tree[0]->name, "(out of memory)");
-			break;
-		default:
-			strcpy(dir->tree[0]->name, "(on fire)");
-			break;
-		}
-
+		dir_set_error(dir->tree[0]);
 		dir->count = 1;
 		return 1;
 	}
@@ -357,8 +352,9 @@ quicksort_pass(Fileentry* *tree, int istart, int iend)
 	r = istart;
 
 	for (i=istart; i < iend; i++) {
-		if (strcasecmp(tree[i]->name, pivot) < 0)
+		if (strcasecmp(tree[i]->name, pivot) < 0) {
 			tree_xchg(tree, i, r++);
+		}
 	}
 
 	tree_xchg(tree, r, iend);
@@ -373,8 +369,9 @@ quicksort(Fileentry* *tree, int istart, int iend)
 	int sp;
 	int p;
 
-	if (istart >= iend)
+	if (istart >= iend) {
 		return;
+	}
 
 	stack = safealloc(sizeof(*stack) * (iend - istart + 1));
 	sp = 0;

@@ -223,6 +223,4 @@ s_delete_file(char *name)
 
 	return 0;
 }
-
-
 /*}}}*/

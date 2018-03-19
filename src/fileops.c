@@ -194,23 +194,11 @@ s_copy_file(char *src, char *dest)
 	if ((in_fd = open(src, O_RDONLY)) < 0) {
 		return retval;
 	}
+	if (fstat(in_fd, &st)) {
+		return retval;
+	}
 
-	if (!(dp = fdopendir(in_fd))) {     /* Try to open in_fd as a directory */
-		retval = errno;
-		if (errno == ENOTDIR) {         /* Src is a file: fstat and copy it */
-			if (!fstat(in_fd, &st)) {
-				if ((out_fd = open(dest, O_WRONLY|O_CREAT, &st.st_mode)) >= 0) {
-					if (sendfile(out_fd, in_fd, NULL, st.st_size) < 0) {
-						retval = errno;
-					} else {
-						retval = 0;
-					}
-					close(out_fd);
-				}
-			}
-		}
-		close(in_fd);
-	} else {                            /* Src is a directory: recursive copy */
+	if ((dp = fdopendir(in_fd))) {      /* Try to open in_fd as a directory */
 		mkdir(dest, st.st_mode);        /* """copy""" the directory */
 		m_progress.obj_done++;
 
@@ -220,6 +208,7 @@ s_copy_file(char *src, char *dest)
 				subpath_src = join_path(src, ep->d_name);
 				subpath_dest = join_path(dest, ep->d_name);
 				retval = s_copy_file(subpath_src, subpath_dest);
+				m_progress.fname = dest;
 				free(subpath_src);
 				free(subpath_dest);
 
@@ -239,10 +228,26 @@ s_copy_file(char *src, char *dest)
 			}
 		}
 		closedir(dp);                   /* No need to close(in_fd) */
+	} else {
+		if (errno == ENOTDIR) {         /* Src is a file: fstat and copy it */
+			if ((out_fd = open(dest, O_WRONLY|O_CREAT, st.st_mode)) >= 0) {
+				if (sendfile(out_fd, in_fd, NULL, st.st_size) < 0) {
+					retval = errno;
+				} else {
+					retval = 0;
+				}
+				close(out_fd);
+			} else {
+				retval = errno;
+			}
+		}
+		close(in_fd);
 	}
 
-    m_progress.obj_done++;
+
+	m_progress.obj_done++;
 	queue_master_update();              /* Request an UI update */
+
 	return retval;
 }
 

@@ -13,7 +13,7 @@ atoo(const char *str)
 {
 	unsigned octal;
 
-	for (; *str != '\0'; str++) {
+	for (octal = 0; *str != '\0'; str++) {
 		if (*str < '0' || *str > '9') {
 			return -1;
 		}
@@ -70,6 +70,9 @@ fish_trunc(char *str)
 int
 is_dot_or_dotdot(char *fn)
 {
+	if (!fn) {
+		return 0;
+	}
 	return (fn[0] == '.' && (fn[1] == '\0' || (fn[1] == '.' && fn[2] == '\0')));
 }
 

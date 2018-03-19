@@ -12,6 +12,7 @@
 #include "backend.h"
 #include "clipboard.h"
 #include "dir.h"
+#include "fileops.h"
 #include "ncutils.h"
 #include "sheriff.h"
 #include "tabs.h"
@@ -678,6 +679,7 @@ main(int argc, char *argv[])
 
 	windows_init(m_view, max_row, max_col, pane_proportions);
 	keypad(m_view[BOT].win, TRUE);
+	fileops_init();
 
 	path = realpath(".", NULL);
 	tabctx_append(path);
@@ -708,6 +710,7 @@ main(int argc, char *argv[])
 	/* Terminate ncurses session */
 	sem_destroy(&m_update_sem);
 	windows_deinit(m_view);
+	fileops_deinit();
 	tabctx_deinit();
 	clip_deinit();
 	endwin();

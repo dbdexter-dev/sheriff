@@ -3,8 +3,6 @@
 * Allow for multiple files to be opened simultaneously
 
 # Clipboard.c
-* Fix progress bar glitches when multiple file operations are carried out at the
-  same time
 * Preserve selection between directory redraws
 
 # Config.h

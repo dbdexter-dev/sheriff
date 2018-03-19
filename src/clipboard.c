@@ -119,8 +119,10 @@ void *
 pthr_clip_exec(void *arg)
 {
 	int i, status;
+	unsigned count;
 	mode_t mode;
 	char *tmpsrc, *tmpdest;
+	Progress *pr;
 	Clipboard *clip;
 	char *destpath;
 
@@ -130,6 +132,19 @@ pthr_clip_exec(void *arg)
 	clip = ((struct pthr_clip_arg*)arg)->clip;
 	destpath = ((struct pthr_clip_arg*)arg)->destpath;
 	status = 0;
+
+	/* Estimate how many files we have to work with */
+	count = 0;
+	for (i=0; i<clip->dir->count; i++) {
+		tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
+		count += enumerate_dir(tmpsrc);
+		free(tmpsrc);
+	}
+
+	pr = fileop_progress();
+	pthread_mutex_lock(&pr->mutex);
+	pr->obj_count += count;
+	pthread_mutex_unlock(&pr->mutex);
 
 	/* Execute whatever the clipboard is holding, on every file the clipboard is
 	 * holding. Yes, I could have done a single for loop; No, I don't think this
@@ -185,6 +200,11 @@ pthr_clip_exec(void *arg)
 			break;
 		}
 	}
+
+	pthread_mutex_lock(&pr->mutex);
+	pr->obj_count -= count;
+	pr->obj_done -= count;
+	pthread_mutex_unlock(&pr->mutex);
 
 	free(destpath);
 	/* Signal the main thread that the current directory contents have changed */

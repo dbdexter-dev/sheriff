@@ -11,10 +11,9 @@
 #include "sheriff.h"
 #include "utils.h"
 
-static unsigned enumerate_dir(char *path);
-static int      s_chmod_file(char *name, mode_t mode);
-static int      s_copy_file(char *src, char *dest);
-static int      s_delete_file(char *name);
+static int s_chmod_file(char *name, mode_t mode);
+static int s_copy_file(char *src, char *dest);
+static int s_delete_file(char *name);
 
 static Progress m_progress;
 
@@ -25,16 +24,28 @@ fileop_progress()
 	return &m_progress;
 }
 
+void
+fileops_deinit()
+{
+	pthread_mutex_destroy(&m_progress.mutex);
+}
+
+void
+fileops_init()
+{
+	pthread_mutex_init(&m_progress.mutex, NULL);
+	m_progress.obj_count = 0;
+	m_progress.obj_done = 0;
+}
+
+
 /* Chmod a file, and if it's a directory, chmod all of its contents as well */
 int
 chmod_file(char *name, mode_t mode)
 {
-	m_progress.obj_count = enumerate_dir(name);
-	m_progress.obj_done = 0;
-
 	s_chmod_file(name, mode);
+	queue_master_update();
 
-	m_progress.fname = NULL;
 	return 0;
 }
 
@@ -43,9 +54,6 @@ int
 copy_file(char *src, char *dest)
 {
 	int copy_status;
-
-	m_progress.obj_count = enumerate_dir(src);
-	m_progress.obj_done = 0;
 
 	copy_status = s_copy_file(src, dest);
 
@@ -60,7 +68,8 @@ copy_file(char *src, char *dest)
 		break;
 	}
 
-	m_progress.fname = NULL;
+	queue_master_update();
+
 	return copy_status;
 }
 
@@ -70,12 +79,9 @@ delete_file(char *name)
 {
 	int delete_status;
 
-	m_progress.obj_count = enumerate_dir(name);
-	m_progress.obj_done = 0;
-
 	delete_status = s_delete_file(name);
+	queue_master_update();
 
-	m_progress.fname = NULL;
 	return delete_status;
 }
 
@@ -161,7 +167,10 @@ s_chmod_file(char *name, mode_t mode)
 
 	lstat(name, &st);
 	chmod(name, mode);
+
+	pthread_mutex_lock(&m_progress.mutex);
 	m_progress.obj_done++;
+	pthread_mutex_unlock(&m_progress.mutex);
 
 	if (S_ISDIR(st.st_mode) && (dp = opendir(name))) {
 		while ((ep = readdir(dp))) {                /* Self-call on subnodes */
@@ -188,7 +197,9 @@ s_copy_file(char *src, char *dest)
 	struct stat st;
 	struct dirent *ep;
 
+	pthread_mutex_lock(&m_progress.mutex);
 	m_progress.fname = dest;
+	pthread_mutex_unlock(&m_progress.mutex);
 
 	retval = -1;
 	if ((in_fd = open(src, O_RDONLY)) < 0) {
@@ -200,7 +211,6 @@ s_copy_file(char *src, char *dest)
 
 	if ((dp = fdopendir(in_fd))) {      /* Try to open in_fd as a directory */
 		mkdir(dest, st.st_mode);        /* """copy""" the directory */
-		m_progress.obj_done++;
 
 		/* Scan the directory, and self-call on each node contained inside */
 		while ((ep = readdir(dp))) {
@@ -208,7 +218,11 @@ s_copy_file(char *src, char *dest)
 				subpath_src = join_path(src, ep->d_name);
 				subpath_dest = join_path(dest, ep->d_name);
 				retval = s_copy_file(subpath_src, subpath_dest);
+
+				pthread_mutex_lock(&m_progress.mutex);
 				m_progress.fname = dest;
+				pthread_mutex_unlock(&m_progress.mutex);
+
 				free(subpath_src);
 				free(subpath_dest);
 
@@ -245,7 +259,10 @@ s_copy_file(char *src, char *dest)
 	}
 
 
+	pthread_mutex_lock(&m_progress.mutex);
 	m_progress.obj_done++;
+	pthread_mutex_unlock(&m_progress.mutex);
+
 	queue_master_update();              /* Request an UI update */
 
 	return retval;
@@ -261,7 +278,10 @@ s_delete_file(char *name)
 	struct stat st;
 
 	lstat(name, &st);
+
+	pthread_mutex_lock(&m_progress.mutex);
 	m_progress.fname = name;
+	pthread_mutex_unlock(&m_progress.mutex);
 
 	/* Delete a directory's contents before attempting to delete the directory
 	 * itself to prevent an ENOTEMPTY */
@@ -281,7 +301,10 @@ s_delete_file(char *name)
 		return errno;
 	}
 
+	pthread_mutex_lock(&m_progress.mutex);
 	m_progress.obj_done++;
+	pthread_mutex_unlock(&m_progress.mutex);
+
 	queue_master_update();
 
 	return 0;

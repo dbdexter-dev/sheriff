@@ -38,6 +38,10 @@ fish_trunc(char *str)
 	int i, last_slash;
 	char *truncd;
 
+	if (!str || str[0] == '\0' || str[1] == '\0') {
+		return;
+	}
+
 	/* There's a trailing slash most of the time */
 	last_slash = strlen(str) - 2;
 	for (; str[last_slash] != '/' && last_slash > 0; last_slash--)
@@ -77,7 +81,7 @@ is_dot_or_dotdot(char *fn)
 }
 
 /* Given a parent directory and a file in it, concatenate them to create a full
- * path. XXX: remember to free the returned pointer in the callee */
+ * path. XXX: remember to free the returned pointer in the caller */
 char*
 join_path(const char *parent, const char *child)
 {

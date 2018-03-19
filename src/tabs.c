@@ -14,6 +14,7 @@ static int m_tabcount = 0;
 int
 tabctx_append(const char *path)
 {
+	int i;
 	char *tmp;
 	TabCtx *ptr;
 
@@ -22,23 +23,26 @@ tabctx_append(const char *path)
 	ptr->next = m_ctx;
 	m_ctx = ptr;
 
-	ptr->left = safealloc(sizeof(*ptr->left));
-	ptr->center = safealloc(sizeof(*ptr->center));
-	ptr->right = safealloc(sizeof(*ptr->right));
-
-	/* Needed to mark the panes as uninitialized */
-	memset(ptr->left, '\0', sizeof(*ptr->left));
-	memset(ptr->center, '\0', sizeof(*ptr->center));
-	memset(ptr->right, '\0', sizeof(*ptr->right));
+	ptr->left = calloc(1, sizeof(*ptr->left));
+	ptr->center = calloc(1, sizeof(*ptr->center));
+	ptr->right = calloc(1, sizeof(*ptr->right));
 
 	/* Initialize left with ${path}/../, center with ${path}, right with
 	 * ${path}/${center[0]}, if this makes any sense */
-	tmp = join_path(path, "../");
-	init_pane_with_path(ptr->left, tmp);
-	free(tmp);
 	init_pane_with_path(ptr->center, path);
 	tmp = join_path(path, ptr->center->dir->tree[0]->name);
-	init_pane_with_path(ptr->right, tmp);
+	if (S_ISDIR(ptr->center->dir->tree[0]->mode)) {
+		init_pane_with_path(ptr->right, tmp);
+	} else {
+		init_pane_with_path(ptr->right, NULL);
+	}
+
+	for (i = strlen(tmp); tmp[i] != '/' && i > 0; i--)
+		;
+	for (i--; tmp[i] != '/' && i > 0; i--)
+		;
+	tmp[i+1] = '\0';
+	init_pane_with_path(ptr->left, tmp);
 	free(tmp);
 
 	m_tabcount++;

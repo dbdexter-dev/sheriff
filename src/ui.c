@@ -202,9 +202,16 @@ update_status_top(Dirview *win)
 	tabs = tabctx_get();
 	user = getenv("USER");
 	cur_off = getmaxx(win->win);
-	wd = join_path(win->ctx->dir->path, "");
 	gethostname(hostn, MAXHOSTNLEN);
 	hi = win->ctx->dir->tree[win->ctx->dir->sel_idx]->name;
+
+	/* If the path is just "/', don't append a slash, otherwise do it */
+	if (win->ctx->dir->path[1] == '\0') {
+		wd = safealloc(sizeof(*wd) * (strlen(win->ctx->dir->path) + 1));
+		strcpy(wd, win->ctx->dir->path);
+	} else {
+		wd = join_path(win->ctx->dir->path, "");
+	}
 
 	assert(user && wd && win->win);
 
@@ -237,12 +244,13 @@ update_status_top(Dirview *win)
 		i++;
 		if (tab_fullname[i] != '\0') {
 			strchomp(tab_fullname+i, tabname, TABNAME_MAX);
-			cur_off -= strlen(tabname) + 1;
-			mvwprintw(win->win, 0, cur_off + 1, "%s", tabname);
+			cur_off -= strlen(tabname);
+			mvwprintw(win->win, 0, cur_off, "%s", tabname);
 		} else {
-			cur_off -= 2;
+			cur_off -= 1;
 			mvwprintw(win->win, 0, cur_off, "/");
 		}
+		cur_off--;                      /* Add a space between tab names */
 	}
 
 	wrefresh(win->win);

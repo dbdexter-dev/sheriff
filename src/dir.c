@@ -13,7 +13,7 @@
 #include "dir.h"
 #include "utils.h"
 
-static void dir_set_error(Fileentry *dir);
+static void dir_set_error(Fileentry *dir, char *msg);
 static int  populate_listing(Direntry *dir, const char *path);
 static void quicksort(Fileentry **dir, int istart, int iend);
 static int  quicksort_pass(Fileentry* *dir, int istart, int iend);
@@ -86,25 +86,23 @@ init_listing(Direntry **direntry, const char *path)
 	if (!(*direntry)) {         /* Fully initialize the Direntry struct */
 		*direntry = safealloc(sizeof(**direntry));
 		(*direntry)->max_nodes = 0;
+		(*direntry)->tree = NULL;
 		(*direntry)->path = NULL;
-	} else {                    /* Semi-initialize a dirty Direntry struct */
-		(*direntry)->count = 0;
 	}
-
 	if ((*direntry)->path) {    /* Free the path if it isn't empty already */
 		free((*direntry)->path);
 	}
+
+	(*direntry)->count = 0;
+	(*direntry)->path = NULL;
 
 	if (path) {                 /* If path isn't null, make a listing of it */
 		(*direntry)->path = realpath(path, NULL);
 		populate_listing(*direntry, path);
 		sort_tree(*direntry);
-	} else {                    /* If it is null, mark the tree as empty */
-		(*direntry)->path = NULL;
-	}
-
+		clear_dir_selection(*direntry);
+	} 
 	(*direntry)->sel_idx = 0;
-	clear_dir_selection(*direntry);
 	return 0;
 }
 
@@ -134,7 +132,7 @@ snapshot_tree_selected(Direntry **dest, Direntry *src)
 		return -1;
 	}
 
-	src->tree[src->sel_idx]->selected = 1;
+	src->tree[src->sel_idx]->selected = 1;  /* Mark current elem as selected */
 
 	/* Count the elemnts that are selected */
 	for (i=0, select_count=0; i<src->count; i++) {
@@ -177,6 +175,7 @@ try_select(Direntry *direntry, int idx, int mark)
 {
 	int i;
 
+	/* Clamp idx between 0 and direntry->count - 1 */
 	if (idx >= direntry->count) {
 		idx = direntry->count - 1;
 	} else if (idx < 0) {
@@ -207,28 +206,36 @@ try_select(Direntry *direntry, int idx, int mark)
  * it's not a valid file, and sets its name to communicate what kind of error
  * happened */
 void
-dir_set_error(Fileentry *file)
+dir_set_error(Fileentry *file, char *msg)
 {
-	file->size = -1;
+	file->gid = 0;
+	file->uid = 0;
+	file->lastchange = 0;
 	file->mode = 0;
+	file->selected = 0;
+	file->size = -1;
 
-	switch(errno) {
-	case EACCES:
-		strcpy(file->name, "(permission denied)");
-		break;
-	case EIO:
-		strcpy(file->name, "(unreadable)");
-		break;
-	case EMFILE:        /* Intentional fallthrough */
-	case ENFILE:
-		strcpy(file->name, "(file descriptor limit reached)");
-		break;
-	case ENOMEM:
-		strcpy(file->name, "(out of memory)");
-		break;
-	default:
-		strcpy(file->name, "(on fire)");
-		break;
+	if (msg) {
+		strcpy(file->name, msg);
+	} else {
+		switch(errno) {
+		case EACCES:
+			strcpy(file->name, "(permission denied)");
+			break;
+		case EIO:
+			strcpy(file->name, "(unreadable)");
+			break;
+		case EMFILE:        /* Intentional fallthrough */
+		case ENFILE:
+			strcpy(file->name, "(file descriptor limit reached)");
+			break;
+		case ENOMEM:
+			strcpy(file->name, "(out of memory)");
+			break;
+		default:
+			strcpy(file->name, "(on fire)");
+			break;
+		}
 	}
 }
 
@@ -247,22 +254,38 @@ populate_listing(Direntry *dir, const char *path)
 	if ((dp = opendir(path))) {
 		while ((ep = readdir(dp))) {
 			if (m_include_hidden || ep->d_name[0] != '.') {
-				entries++;
+				if (!is_dot_or_dotdot(ep->d_name)) {
+					entries++;
+				}
 			}
 		}
 		closedir(dp);
 		dir->count = entries;
-	/* Opendir failed, create a single element with error code */
 	} else {
-		if (!(dir->tree)) {
+		if (!dir->tree) {
 			dir->tree = safealloc(sizeof(*(dir->tree)));
+			dir->tree[0] = safealloc(sizeof(*(dir->tree[0])));
+			dir->max_nodes = 1;
 		}
-		dir_set_error(dir->tree[0]);
+		dir_set_error(dir->tree[0], NULL);
 		dir->count = 1;
 		return 1;
 	}
 
-	/* Reallocte a chunk of memory to contain all the elements if we don't have
+	if (entries == 0) {
+		if (dir->max_nodes == 0) {
+			if (!dir->tree) {
+				dir->tree = safealloc(sizeof(*(dir->tree)));
+			}
+			dir->tree[0] = safealloc(sizeof(*(dir->tree[0])));
+			dir->max_nodes = 1;
+		}
+		dir_set_error(dir->tree[0], "(empty)");
+		dir->count = 1;
+		return 0;
+	}
+
+	/* Reallocate a chunk of memory to contain all the elements if we don't have
 	 * enough. Use realloc or malloc depending on whether the dir->tree array is
 	 * already initalized or not */
 	if (dir->max_nodes < entries) {
@@ -272,68 +295,49 @@ populate_listing(Direntry *dir, const char *path)
 			dir->tree = realloc(dir->tree, sizeof(*dir->tree) * entries);
 		}
 
-		for (i=dir->max_nodes; i<entries; i++) {
+		for (i = dir->max_nodes; i < entries; i++) {
 			dir->tree[i] = safealloc(sizeof(*dir->tree[0]));
 		}
 
 		dir->max_nodes = entries;
 	}
 
-	/* Populate the directory listing */
+	/* Populate the Direntry struct with all the items inside the directory
+	 * listing. If opendir fails, set error and exit */
 	if ((dp = opendir(path))) {
-		for (i = 0; i < entries; i++) {
-			/* Read all the files in a directory, skipping the hidden ones if so
-			 * requested */
-			do {
-				ep = readdir(dp);
-			} while (!m_include_hidden && ep->d_name[0] == '.');
-
-			/* Discard . and .. */
-			if (is_dot_or_dotdot(ep->d_name)) {
-				entries--;
-				i--;
-				dir->count--;
-			} else {
-				strcpy(dir->tree[i]->name, ep->d_name);
-				/* Allocate space for the concatenation <path>/<filename> */
-				tmp = safealloc(sizeof(*tmp) * (strlen(path) +
-												strlen(dir->tree[i]->name) +
-												1 + 1));
-				sprintf(tmp, "%s/%s", path, dir->tree[i]->name);
-
-				/* Populate file stats, if this fails create an error entry
-				 * instead */
-				if (lstat(tmp, &st) < 0) {
-					dir_set_error(dir->tree[i]);
-				} else {
-					dir->tree[i]->size = st.st_size;
-					dir->tree[i]->uid = st.st_uid;
-					dir->tree[i]->gid = st.st_gid;
-					dir->tree[i]->mode = st.st_mode;
-					dir->tree[i]->lastchange = st.st_mtim.tv_sec;
+		i = 0;
+		while (i < entries && (ep = readdir(dp))) {
+			if (m_include_hidden || ep->d_name[0] != '.') {
+				if (!is_dot_or_dotdot(ep->d_name)) {    /* Exclude . and .. */
+					/* Populate file stats, if this fails create an error entry
+					 * instead */
+					tmp = join_path(path, ep->d_name);
+					if (lstat(tmp, &st) < 0) {
+						dir_set_error(dir->tree[i], NULL);
+					} else {
+						strcpy(dir->tree[i]->name, ep->d_name);
+						dir->tree[i]->size = st.st_size;
+						dir->tree[i]->uid = st.st_uid;
+						dir->tree[i]->gid = st.st_gid;
+						dir->tree[i]->mode = st.st_mode;
+						dir->tree[i]->lastchange = st.st_mtim.tv_sec;
+					}
+					free(tmp);
+					i++;
 				}
-
-				free(tmp);
 			}
 		}
 		closedir(dp);
 	} else {
-		dir_set_error(dir->tree[0]);
+		dir_set_error(dir->tree[0], NULL);
 		dir->count = 1;
 		return 1;
-	}
-
-	if (entries == 0) {
-		dir->tree[0]->size = -1;
-		dir->tree[0]->mode = 0;
-		strcpy(dir->tree[0]->name, "(empty)");
-		dir->count = 1;
 	}
 
 	return 0;
 }
 
-/* Iterative implementation of quicksort */
+/* Iterative implementation of quicksort {{{*/
 void
 quicksort(Fileentry* *tree, int istart, int iend)
 {
@@ -367,8 +371,8 @@ quicksort(Fileentry* *tree, int istart, int iend)
 	}
 	free(stack);
 }
-
-/* Quicksort algorithm pass, center element is the pivot */
+/*}}}*/
+/* Quicksort algorithm pass, center element is the pivot {{{*/
 int
 quicksort_pass(Fileentry* *tree, int istart, int iend)
 {
@@ -390,7 +394,7 @@ quicksort_pass(Fileentry* *tree, int istart, int iend)
 	tree_xchg(tree, r, iend);
 	return r;
 }
-
+/*}}}*/
 
 /* Alphabetically sort a directory listing, directories first
  * This looks ugly because I need to keep track of the element referencing

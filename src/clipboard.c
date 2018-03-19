@@ -157,6 +157,9 @@ pthr_clip_exec(void *arg)
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
 				status |= copy_file(tmpsrc, tmpdest);
+				pthread_mutex_lock(&pr->mutex);
+				pr->fname = NULL;
+				pthread_mutex_unlock(&pr->mutex);
 				free(tmpsrc);
 				free(tmpdest);
 			}
@@ -166,6 +169,9 @@ pthr_clip_exec(void *arg)
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
 				status |= move_file(tmpsrc, tmpdest);
+				pthread_mutex_lock(&pr->mutex);
+				pr->fname = NULL;
+				pthread_mutex_unlock(&pr->mutex);
 				free(tmpsrc);
 				free(tmpdest);
 			}
@@ -175,6 +181,9 @@ pthr_clip_exec(void *arg)
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
 				status |= link_file(tmpsrc, tmpdest);
+				pthread_mutex_lock(&pr->mutex);
+				pr->fname = NULL;
+				pthread_mutex_unlock(&pr->mutex);
 				free(tmpsrc);
 				free(tmpdest);
 			}
@@ -183,6 +192,9 @@ pthr_clip_exec(void *arg)
 			for (i=0; i<clip->dir->count; i++) {
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 				status |= delete_file(tmpsrc);
+				pthread_mutex_lock(&pr->mutex);
+				pr->fname = NULL;
+				pthread_mutex_unlock(&pr->mutex);
 				free(tmpsrc);
 			}
 			break;
@@ -192,6 +204,9 @@ pthr_clip_exec(void *arg)
 				for (i=0; i<clip->dir->count; i++) {
 					tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 					status |= chmod_file(tmpsrc, mode);
+					pthread_mutex_lock(&pr->mutex);
+					pr->fname = NULL;
+					pthread_mutex_unlock(&pr->mutex);
 					free(tmpsrc);
 				}
 			}

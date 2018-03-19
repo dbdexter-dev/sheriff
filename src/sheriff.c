@@ -281,24 +281,22 @@ navigate(const Arg *arg)
 	}
 }
 
-/* Clone the current tab */
+/* Clone the current tab, and switch to it */
 void
 tab_clone(const Arg *arg)
 {
 	const char *path;
-	const Arg zero = {.i = 0};
 
 	path = m_view[CENTER].ctx->dir->path;
 	tabctx_append(path);
-
-	rel_tabswitch(&zero);
+	abs_tabswitch(0);
 }
 
 /* Delete the current tab, and exit if there are no tabs left */
 void
 tab_delete(const Arg *arg)
 {
-	const Arg zero = {.i = 0};
+	const Arg zero = {.i = 1};
 
 	if (tabctx_remove(cur_tab)) {
 		ungetch('q');
@@ -425,18 +423,22 @@ int
 direct_cd(char *path)
 {
 	char *fullpath;
-	int status;
+	int i, status;
 	struct stat st;
 
 	status = 0;
 
 	if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
-		fullpath = join_path(path, "../");
-		status |= init_pane_with_path(m_view[LEFT].ctx, fullpath);
-		free(fullpath);
 		status |= init_pane_with_path(m_view[CENTER].ctx, path);
 		fullpath = join_path(path, m_view[CENTER].ctx->dir->tree[0]->name);
 		status |= init_pane_with_path(m_view[RIGHT].ctx, fullpath);
+		for (i = strlen(fullpath); fullpath[i] != '/' && i > 0; i--)
+			;
+		for (i--; fullpath[i] != '/' && i > 0; i--)
+			;
+		fullpath[i+1] = '\0';
+
+		status |= init_pane_with_path(m_view[LEFT].ctx, fullpath);
 		free(fullpath);
 
 		status |= render_tree(m_view + LEFT, 0);

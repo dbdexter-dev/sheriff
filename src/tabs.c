@@ -14,7 +14,6 @@ static int m_tabcount = 0;
 int
 tabctx_append(const char *path)
 {
-	int i;
 	char *tmp;
 	TabCtx *ptr;
 
@@ -29,20 +28,18 @@ tabctx_append(const char *path)
 
 	/* Initialize left with ${path}/../, center with ${path}, right with
 	 * ${path}/${center[0]}, if this makes any sense */
+	tmp = join_path(path, "..");
+	init_pane_with_path(ptr->left, tmp);
+	free(tmp);
+
 	init_pane_with_path(ptr->center, path);
+
 	tmp = join_path(path, ptr->center->dir->tree[0]->name);
 	if (S_ISDIR(ptr->center->dir->tree[0]->mode)) {
 		init_pane_with_path(ptr->right, tmp);
 	} else {
 		init_pane_with_path(ptr->right, NULL);
 	}
-
-	for (i = strlen(tmp); tmp[i] != '/' && i > 0; i--)
-		;
-	for (i--; tmp[i] != '/' && i > 0; i--)
-		;
-	tmp[i+1] = '\0';
-	init_pane_with_path(ptr->left, tmp);
 	free(tmp);
 
 	m_tabcount++;
@@ -70,6 +67,29 @@ tabctx_by_idx(int *idx)
 	}
 
 	return retval;
+}
+
+void
+tabctx_cd(TabCtx *ctx, const char *path)
+{
+	char *tmp, *ptr;
+
+	init_pane_with_path(ctx->center, path);
+
+	tmp = join_path(path, ctx->center->dir->tree[0]->name);
+	init_pane_with_path(ctx->right, tmp);
+
+	if (S_ISDIR(ctx->center->dir->tree[0]->mode)) {
+		for (ptr = tmp + strlen(tmp); *ptr != '/'; ptr--);
+		for (ptr--; *ptr != '/'; ptr--);
+		*(ptr+1) = '\0';
+		init_pane_with_path(ctx->left, tmp);
+	} else {
+		init_pane_with_path(ctx->left, NULL);
+	}
+
+	free(tmp);
+
 }
 
 /* Free a whole TabCtx linked list */

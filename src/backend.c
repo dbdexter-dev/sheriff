@@ -21,13 +21,12 @@ associate_dir(PaneCtx *ctx, Direntry *direntry)
 
 /* Initialize a window with a given path, which can also be NULL. In that case,
  * the window passed as an argument is initialized empty */
-int
+void
 init_pane_with_path(PaneCtx *ctx, const char *path)
 {
 	init_listing(&ctx->dir, path);
 	ctx->visual = 0;
 	ctx->offset = 0;
-	return 0;
 }
 
 /* Navigate back out of a directory, updating the Direntries */
@@ -35,7 +34,7 @@ int
 navigate_back(PaneCtx *left, PaneCtx *center, PaneCtx *right)
 {
 	Direntry *tmpdir;
-	char *fullpath;
+	char *leftpath;
 
 	/* Rotate right by one the allocated directories */
 	tmpdir = right->dir;
@@ -48,11 +47,11 @@ navigate_back(PaneCtx *left, PaneCtx *center, PaneCtx *right)
 	left->offset = 0;
 
 	assert(center->dir->path);
-	fullpath = join_path(center->dir->path, "../");
 
 	/* Init left pane with parent directory contents */
-	init_pane_with_path(left, fullpath);
-	free(fullpath);
+	leftpath = join_path(center->dir->path, "../");
+	init_pane_with_path(left, leftpath);
+	free(leftpath);
 
 	return 0;
 }
@@ -61,7 +60,7 @@ navigate_back(PaneCtx *left, PaneCtx *center, PaneCtx *right)
 int
 navigate_fwd(PaneCtx *left, PaneCtx *center, PaneCtx *right)
 {
-	Fileentry* centersel;
+	Fileentry *centersel;
 	Direntry *tmpdir;
 	char *fullpath;
 

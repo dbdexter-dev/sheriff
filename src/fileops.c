@@ -95,9 +95,9 @@ link_file(char *src, char *dest)
 	return 0;
 }
 
-/* Move something by trying to use rename() since it's faster and atomic by 
+/* Move something by trying to use rename() since it's faster and atomic by
  * definition. If this does not work, resort to copying src to dest and deleting
- * the source. If anything fails during the copy, bail out, since we can't be 
+ * the source. If anything fails during the copy, bail out, since we can't be
  * sure the files have made it safely to their new destination */
 int
 move_file(char *src, char *dest)
@@ -113,9 +113,9 @@ move_file(char *src, char *dest)
 			if ((retval = delete_file(src)) < 0) {
 				return retval;
 			}
-        } else {
-            return errno;
-        }
+		} else {
+			return errno;
+		}
 	}
 	return retval;
 }
@@ -226,7 +226,7 @@ s_copy_file(char *src, char *dest)
 				free(subpath_src);
 				free(subpath_dest);
 
-				/* Clean up the mess if the copy failed (read: delete the file 
+				/* Clean up the mess if the copy failed (read: delete the file
 				 * if something bad happened during the copy */
 				switch (retval) {
 				case ENOMEM:            /* 4 intentional fallthroughs */

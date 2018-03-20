@@ -23,52 +23,6 @@ atoo(const char *str)
 	return octal;
 }
 
-/* Die atrociously when something bad happens */
-void
-die(const char *msg)
-{
-	fprintf(stderr, "[FATAL]: %s >.<\n", msg);
-	exit(1);
-}
-
-/* Compress a string, truncating like the fish shell does as a default */
-void
-fish_trunc(char *str)
-{
-	int i, last_slash;
-	char *truncd;
-
-	if (!str || str[0] == '\0' || str[1] == '\0') {
-		return;
-	}
-
-	/* There's a trailing slash most of the time */
-	last_slash = strlen(str) - 2;
-	for (; str[last_slash] != '/' && last_slash > 0; last_slash--)
-		;
-
-	truncd=str;
-	i=0;
-
-	while (i < last_slash) {
-		*(truncd++) = str[i++];
-		*(truncd++) = str[i];
-
-		if (str[i++] == '.') {
-			*(truncd++) = str[i++];
-		}
-
-		for (; str[i] != '/' && i < last_slash; i++)
-			;
-	}
-
-	for (; str[i] != '\0'; i++) {
-		*(truncd++) = str[i];
-	}
-
-	*(truncd) = '\0';
-}
-
 /* Check if a directory is "." or ".." more efficiently than calling strcmp
  * twice */
 int
@@ -204,6 +158,44 @@ tohuman(unsigned long bytes, char *human)
 			sprintf(human, "%3.2f %c", fbytes, suffix[exp_3]);
 		}
 	}
+}
+
+/* Compress a string, truncating like the fish shell does as a default */
+void
+zip_path(char *str)
+{
+	int i, last_slash;
+	char *truncd;
+
+	if (!str || str[0] == '\0' || str[1] == '\0') {
+		return;
+	}
+
+	/* There's a trailing slash most of the time */
+	last_slash = strlen(str) - 2;
+	for (; str[last_slash] != '/' && last_slash > 0; last_slash--)
+		;
+
+	truncd=str;
+	i=0;
+
+	while (i < last_slash) {
+		*(truncd++) = str[i++];
+		*(truncd++) = str[i];
+
+		if (str[i++] == '.') {
+			*(truncd++) = str[i++];
+		}
+
+		for (; str[i] != '/' && i < last_slash; i++)
+			;
+	}
+
+	for (; str[i] != '\0'; i++) {
+		*(truncd++) = str[i];
+	}
+
+	*(truncd) = '\0';
 }
 
 /* Static functions {{{*/

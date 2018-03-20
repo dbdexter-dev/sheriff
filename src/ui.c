@@ -59,7 +59,7 @@ render_tree(Dirview *win, int show_sizes)
 			case 0:                     /* Not a file */
 				wattrset(win->win, COLOR_PAIR(PAIR_RED_DEF));
 				break;
-			case S_IFLNK:               
+			case S_IFLNK:
 				wattrset(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
 				break;
 			case S_IFDIR:
@@ -222,7 +222,7 @@ update_status_top(Dirview *win)
 	wattron(win->win, COLOR_PAIR(PAIR_CYAN_DEF));
 	mvwprintw(win->win, 0, 0, "%s@%s", user, hostn);
 	wattron(win->win, COLOR_PAIR(PAIR_GREEN_DEF));
-	fish_trunc(wd);
+	zip_path(wd);
 	wprintw(win->win, " %s", wd);
 	free(wd);
 	wattron(win->win, COLOR_PAIR(PAIR_WHITE_DEF));

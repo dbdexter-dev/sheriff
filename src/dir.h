@@ -3,11 +3,14 @@
  * ones are declared static inside dir.c, while the ones listed here are
  * expected to be used inside sheriff.c and backend.c when needed.
  * The two structs declared here represent (in order of appearance) a file in a
- * listing, and a whole listing. The first one stores its name, size, owners,
- * mode, time of the last change, and whether it is currently selected. The
- * second one stores the path it refers to, the listing itself, the number of
+ * listing, and a whole listing.
+ * The first one stores its name, size, owners, mode, time of the last change,
+ * and whether it is currently selected.
+ * The second one stores the path it refers to, the listing itself, the number of
  * valid items in it, the index of the highlighted element, and how many nodes
  * it can hold without needing a calloc() call.
+ * NOTE: you can assume that path won't contain any trailing slashes. It's
+ * coming from a call to realpath(), so no worries there
  */
 
 #ifndef DIR_H
@@ -39,8 +42,9 @@ typedef struct {
 
 void clear_dir_selection(Direntry *direntry);
 void dir_toggle_hidden();
-int  init_listing(Direntry **direntry, const char *path);
+int  fuzzy_file_idx(const Direntry *dir, const char *fname, int start_idx);
 int  free_listing(Direntry **direntry);
+int  init_listing(Direntry **direntry, const char *path);
 int  rescan_listing(Direntry *direntry);
 int  snapshot_tree_selected(Direntry **dest, Direntry *src);
 int  try_select(Direntry *direntry, int idx, int mark);

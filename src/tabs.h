@@ -1,3 +1,10 @@
+/**
+ * The TabCtx struct is an element of a linked list of tabs. It holds info about
+ * the three main backend structures that define a tab. All the functions in
+ * here handle interfacing with this linked list: getting items from it, adding
+ * items to it, and that's about it.
+ */
+
 #ifndef TABCTX_H
 #define TABCTX_H
 

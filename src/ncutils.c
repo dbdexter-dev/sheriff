@@ -23,14 +23,14 @@ dialog(WINDOW *win, char *input, const char *msg, ...)
 	va_end(ap);
 
 	if (input) {
-		wtimeout(win, -1);
-		echo();
-		curs_set(1);
+		wtimeout(win, -1);              /* Disable input timeout */
+		echo();                         /* Enable input echo */
+		curs_set(1);                    /* Show cursor */
 
 		wgetnstr(win, input, MAXCMDLEN);
 		werase(win);
 
-		curs_set(0);
+		curs_set(0);                    /* Go back to default */
 		noecho();
 		wtimeout(win, UPD_INTERVAL);
 	}
@@ -56,13 +56,15 @@ change_highlight(WINDOW *win, int oidx, int nidx)
 	attr_t attr;
 
 	assert(win);
-	getyx(win, savedrow, savedcol);
+	getyx(win, savedrow, savedcol);     /* Save cursor position */
 
+	/* Get the old attribute, un-reverse it, and set it */
 	attr = mvwinch(win, oidx, 0) & (A_COLOR | A_ATTRIBUTES) & ~A_REVERSE;
 	wchgat(win, -1, attr, PAIR_NUMBER(attr), NULL);
+
+	/* Get the new attribute, reverse it, then set it */
 	attr = (mvwinch(win, nidx, 0) & (A_COLOR | A_ATTRIBUTES)) | A_REVERSE;
 	wchgat(win, -1, attr, PAIR_NUMBER(attr), NULL);
 
-	wmove(win, savedrow, savedcol);
-	return;
+	wmove(win, savedrow, savedcol);     /* Restore cursor position */
 }

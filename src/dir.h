@@ -2,7 +2,14 @@
  * The main directory manipulation functions are here. Most of the low-level
  * ones are declared static inside dir.c, while the ones listed here are
  * expected to be used inside sheriff.c and backend.c when needed.
+ * The two structs declared here represent (in order of appearance) a file in a
+ * listing, and a whole listing. The first one stores its name, size, owners,
+ * mode, time of the last change, and whether it is currently selected. The
+ * second one stores the path it refers to, the listing itself, the number of
+ * valid items in it, the index of the highlighted element, and how many nodes
+ * it can hold without needing a calloc() call.
  */
+
 #ifndef DIR_H
 #define DIR_H
 
@@ -19,7 +26,7 @@ typedef struct {
 	uid_t uid, gid;
 	mode_t mode;
 	time_t lastchange;
-	int selected;
+	char selected;
 } Fileentry;
 
 typedef struct {
@@ -30,7 +37,7 @@ typedef struct {
 	int max_nodes;          /* Number of nodes allocated in Fileentry** */
 } Direntry;
 
-int  clear_dir_selection(Direntry *direntry);
+void clear_dir_selection(Direntry *direntry);
 void dir_toggle_hidden();
 int  init_listing(Direntry **direntry, const char *path);
 int  free_listing(Direntry **direntry);

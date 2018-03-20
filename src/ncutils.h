@@ -1,7 +1,10 @@
 /**
  * All the helper functions that deal directly with an ncurses window, so
- * refreshing it, clearing it, initializing colors, and the like.
+ * refreshing it, clearing it, initializing colors, and the like, are defined
+ * here. These are to be intended just as convenient wrappers for common window
+ * operations. The meat of the UI work is in ui.c
  */
+
 #ifndef NCUTILS_H
 #define NCUTILS_H
 

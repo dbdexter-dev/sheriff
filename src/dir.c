@@ -1,8 +1,8 @@
-#include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -13,18 +13,17 @@
 #include "dir.h"
 #include "utils.h"
 
-#include <stdio.h>
-
-static int  m_include_hidden = 1;
-
-static int  populate_tree(Direntry *dir, const char *path);
-static int  quicksort_pass(Fileentry* *dir, int istart, int iend);
+static void dir_set_error(Fileentry *dir, char *msg);
+static int  populate_listing(Direntry *dir, const char *path);
 static void quicksort(Fileentry **dir, int istart, int iend);
-static void tree_xchg(Fileentry **tree, int a, int b);
+static int  quicksort_pass(Fileentry* *dir, int istart, int iend);
 static int  sort_tree(Direntry *dir);
+static void tree_xchg(Fileentry **tree, int a, int b);
+
+static int  m_include_hidden = 1;   /* Should we show hidden files globally? */
 
 /* Mark all files in a direntry tree as not selected */
-int
+void
 clear_dir_selection(Direntry *direntry)
 {
 	int i;
@@ -32,19 +31,18 @@ clear_dir_selection(Direntry *direntry)
 	for (i=0; i<direntry->count; i++) {
 		direntry->tree[i]->selected = 0;
 	}
-
-	return 0;
 }
 
 /* Toggle hidden files visibility, or rather, whether we should keep them in the
- * tree array from now on */
+ * tree array in every subsequent populate_listing() */
 void
 dir_toggle_hidden()
 {
 	m_include_hidden ^= 1;
 }
 
-/* Free memory associated with a tree */
+/* Free memory associated with a Direntry, marking it as not allocated once it
+ * has been fully deallocated */
 int
 free_listing(Direntry **direntry)
 {
@@ -81,32 +79,30 @@ free_listing(Direntry **direntry)
 int
 init_listing(Direntry **direntry, const char *path)
 {
-	assert(direntry);
-
-	if (!(*direntry)) {
-		/* Fully initialize the Direntry struct */
-		*direntry = safealloc(sizeof(**direntry));
-		(*direntry)->max_nodes = 0;
-		(*direntry)->path = NULL;
-	} else {
-		/* Semi-initialize a dirty Direntry struct */
-		(*direntry)->count = 0;
+	if (!direntry) {            /* Direntry must exist for this to make sense */
+		return -1;
 	}
 
-	if ((*direntry)->path) {
+	if (!(*direntry)) {         /* Fully initialize the Direntry struct */
+		*direntry = safealloc(sizeof(**direntry));
+		(*direntry)->max_nodes = 0;
+		(*direntry)->tree = NULL;
+		(*direntry)->path = NULL;
+	}
+	if ((*direntry)->path) {    /* Free the path if it isn't empty already */
 		free((*direntry)->path);
 	}
 
-	if (path) {
-		(*direntry)->path = realpath(path, NULL);
-		populate_tree(*direntry, path);
-		sort_tree(*direntry);
-	} else {
-		(*direntry)->path = NULL;
-	}
+	(*direntry)->count = 0;
+	(*direntry)->path = NULL;
 
+	if (path) {                 /* If path isn't null, make a listing of it */
+		(*direntry)->path = realpath(path, NULL);
+		populate_listing(*direntry, path);
+		sort_tree(*direntry);
+		clear_dir_selection(*direntry);
+	} 
 	(*direntry)->sel_idx = 0;
-	clear_dir_selection(*direntry);
 	return 0;
 }
 
@@ -118,7 +114,7 @@ int
 rescan_listing(Direntry *direntry)
 {
 	if (direntry->path) {
-		populate_tree(direntry, direntry->path);
+		populate_listing(direntry, direntry->path);
 		sort_tree(direntry);
 		clear_dir_selection(direntry);
 	}
@@ -132,53 +128,54 @@ snapshot_tree_selected(Direntry **dest, Direntry *src)
 	int i, j, select_count;
 	Direntry *d;
 
-	assert(src);
-	assert(dest);
-
-	if (!src->tree) {
+	if (!src || !dest || !src->tree) {
 		return -1;
 	}
 
-	src->tree[src->sel_idx]->selected = 1;
+	src->tree[src->sel_idx]->selected = 1;  /* Mark current elem as selected */
 
-	select_count = 0;
-	for (i=0; i<src->count; i++) {
+	/* Count the elemnts that are selected */
+	for (i=0, select_count=0; i<src->count; i++) {
 		if (src->tree[i]->selected) {
 			select_count++;
 		}
 	}
 
+	if (!select_count) {    /* Return if there are no elements selected */
+		return 0;
+	}
+
 	*dest = safealloc(sizeof(**dest));
 	d = *dest;
 
-	if (src->tree || !select_count) {
-		d->count = select_count;
-		d->sel_idx = 0;
-		d->max_nodes = select_count;
+	/* Copy tree metadata */
+	d->count = select_count;
+	d->sel_idx = 0;
+	d->max_nodes = select_count;
+	d->path = safealloc(sizeof(*(d->path)) * (strlen(src->path) + 1));
+	strcpy(d->path, src->path);
 
-		d->path = safealloc(sizeof(*(d->path)) * (strlen(src->path) + 1));
-		strcpy(d->path, src->path);
-
-		d->tree = safealloc(sizeof(*(d->tree)) * select_count);
-		for (i=0, j=0; i<src->count; i++) {
-			if (src->tree[i]->selected) {
-				d->tree[j] = safealloc(sizeof(*(d->tree[0])));
-				memcpy(d->tree[j], src->tree[i], sizeof(*(src->tree[0])));
-				j++;
-			}
+	/* Copy tree members */
+	d->tree = safealloc(sizeof(*(d->tree)) * select_count);
+	for (i=0, j=0; j<select_count; i++) {
+		if (src->tree[i]->selected) {
+			d->tree[j] = safealloc(sizeof(*(d->tree[0])));
+			memcpy(d->tree[j], src->tree[i], sizeof(*(src->tree[0])));
+			j++;
 		}
 	}
 
 	return 0;
 }
 
-/* Try to select the idxth element in the list, and return the index of the line
- * that was actually selected */
+/* Try to select the idxth element in the list, and return the index of the
+ * element that was actually selected */
 int
 try_select(Direntry *direntry, int idx, int mark)
 {
 	int i;
 
+	/* Clamp idx between 0 and direntry->count - 1 */
 	if (idx >= direntry->count) {
 		idx = direntry->count - 1;
 	} else if (idx < 0) {
@@ -198,17 +195,53 @@ try_select(Direntry *direntry, int idx, int mark)
 		}
 	}
 
-
-	/* Update the sel pointer to the currently selected entry */
+	/* Update the sel pointer to the currently selected entry and return */
 	direntry->sel_idx = idx;
-
-	return direntry->sel_idx;
+	return idx;
 }
 
 /* Static functions {{{*/
+/* When any function fails to read a file attributes, it calls this function,
+ * which populates the Fileentry struct with a special value, signaling that
+ * it's not a valid file, and sets its name to communicate what kind of error
+ * happened */
+void
+dir_set_error(Fileentry *file, char *msg)
+{
+	file->gid = 0;
+	file->uid = 0;
+	file->lastchange = 0;
+	file->mode = 0;
+	file->selected = 0;
+	file->size = -1;
+
+	if (msg) {
+		strcpy(file->name, msg);
+	} else {
+		switch(errno) {
+		case EACCES:
+			strcpy(file->name, "(permission denied)");
+			break;
+		case EIO:
+			strcpy(file->name, "(unreadable)");
+			break;
+		case EMFILE:        /* Intentional fallthrough */
+		case ENFILE:
+			strcpy(file->name, "(file descriptor limit reached)");
+			break;
+		case ENOMEM:
+			strcpy(file->name, "(out of memory)");
+			break;
+		default:
+			strcpy(file->name, "(on fire)");
+			break;
+		}
+	}
+}
+
 /* Populate a Fileentry list with a directory listing */
 int
-populate_tree(Direntry *dir, const char *path)
+populate_listing(Direntry *dir, const char *path)
 {
 	DIR *dp;
 	struct dirent *ep;
@@ -221,42 +254,38 @@ populate_tree(Direntry *dir, const char *path)
 	if ((dp = opendir(path))) {
 		while ((ep = readdir(dp))) {
 			if (m_include_hidden || ep->d_name[0] != '.') {
-				entries++;
+				if (!is_dot_or_dotdot(ep->d_name)) {
+					entries++;
+				}
 			}
 		}
 		closedir(dp);
 		dir->count = entries;
-	/* Opendir failed, create a single element with error code */
 	} else {
-		if (!(dir->tree)) {
+		if (!dir->tree) {
 			dir->tree = safealloc(sizeof(*(dir->tree)));
+			dir->tree[0] = safealloc(sizeof(*(dir->tree[0])));
+			dir->max_nodes = 1;
 		}
-
-		dir->tree[0]->size = -1;
-		dir->tree[0]->mode = 0;
-		switch (errno) {
-		case EACCES:
-			strcpy(dir->tree[0]->name, "(permission denied)");
-			break;
-		case EIO:
-			strcpy(dir->tree[0]->name, "(unreadable)");
-			break;
-		case EMFILE:        /* Intentional fallthrough */
-		case ENFILE:
-			strcpy(dir->tree[0]->name, "(file descriptor limit reached)");
-			break;
-		case ENOMEM:
-			strcpy(dir->tree[0]->name, "(out of memory)");
-			break;
-		default:
-			strcpy(dir->tree[0]->name, "(on fire)");
-			break;
-		}
-
+		dir_set_error(dir->tree[0], NULL);
 		dir->count = 1;
 		return 1;
 	}
-	/* Reallocte a chunk of memory to contain all the elements if we don't have
+
+	if (entries == 0) {
+		if (dir->max_nodes == 0) {
+			if (!dir->tree) {
+				dir->tree = safealloc(sizeof(*(dir->tree)));
+			}
+			dir->tree[0] = safealloc(sizeof(*(dir->tree[0])));
+			dir->max_nodes = 1;
+		}
+		dir_set_error(dir->tree[0], "(empty)");
+		dir->count = 1;
+		return 0;
+	}
+
+	/* Reallocate a chunk of memory to contain all the elements if we don't have
 	 * enough. Use realloc or malloc depending on whether the dir->tree array is
 	 * already initalized or not */
 	if (dir->max_nodes < entries) {
@@ -266,108 +295,49 @@ populate_tree(Direntry *dir, const char *path)
 			dir->tree = realloc(dir->tree, sizeof(*dir->tree) * entries);
 		}
 
-		for (i=dir->max_nodes; i<entries; i++) {
+		for (i = dir->max_nodes; i < entries; i++) {
 			dir->tree[i] = safealloc(sizeof(*dir->tree[0]));
 		}
 
 		dir->max_nodes = entries;
 	}
 
-	/* Populate the directory listing */
+	/* Populate the Direntry struct with all the items inside the directory
+	 * listing. If opendir fails, set error and exit */
 	if ((dp = opendir(path))) {
-		for (i = 0; i < entries; i++) {
-
-			do {
-				ep = readdir(dp);
-			} while (!m_include_hidden && ep->d_name[0] == '.');
-
-			if (is_dot_or_dotdot(ep->d_name)) {
-				entries--;
-				i--;
-				dir->count--;
-			} else {
-				/* Populate the first struct fields */
-				strcpy(dir->tree[i]->name, ep->d_name);
-
-				/* Allocate space for the concatenation <path>/<filename> */
-				tmp = safealloc(sizeof(*tmp) * (strlen(path) +
-												strlen(dir->tree[i]->name) +
-												1 + 1));
-				sprintf(tmp, "%s/%s", path, dir->tree[i]->name);
-
-				/* Get file stats */
-				lstat(tmp, &st);
-
-				/* Populate the remaining struct fields */
-				dir->tree[i]->size = st.st_size;
-				dir->tree[i]->uid = st.st_uid;
-				dir->tree[i]->gid = st.st_gid;
-				dir->tree[i]->mode = st.st_mode;
-				dir->tree[i]->lastchange = st.st_mtim.tv_sec;
-
-				free(tmp);
+		i = 0;
+		while (i < entries && (ep = readdir(dp))) {
+			if (m_include_hidden || ep->d_name[0] != '.') {
+				if (!is_dot_or_dotdot(ep->d_name)) {    /* Exclude . and .. */
+					/* Populate file stats, if this fails create an error entry
+					 * instead */
+					tmp = join_path(path, ep->d_name);
+					if (lstat(tmp, &st) < 0) {
+						dir_set_error(dir->tree[i], NULL);
+					} else {
+						strcpy(dir->tree[i]->name, ep->d_name);
+						dir->tree[i]->size = st.st_size;
+						dir->tree[i]->uid = st.st_uid;
+						dir->tree[i]->gid = st.st_gid;
+						dir->tree[i]->mode = st.st_mode;
+						dir->tree[i]->lastchange = st.st_mtim.tv_sec;
+					}
+					free(tmp);
+					i++;
+				}
 			}
 		}
 		closedir(dp);
 	} else {
-		dir->tree[0]->size = -1;
-		dir->tree[0]->mode = 0;
-		switch (errno) {
-		case EACCES:
-			strcpy(dir->tree[0]->name, "(permission denied)");
-			break;
-		case EIO:
-			strcpy(dir->tree[0]->name, "(unreadable)");
-			break;
-		case EMFILE:        /* Intentional fallthrough */
-		case ENFILE:
-			strcpy(dir->tree[0]->name, "(file descriptor limit reached)");
-			break;
-		case ENOMEM:
-			strcpy(dir->tree[0]->name, "(out of memory)");
-			break;
-		default:
-			strcpy(dir->tree[0]->name, "(on fire)");
-			break;
-		}
-
+		dir_set_error(dir->tree[0], NULL);
 		dir->count = 1;
 		return 1;
-	}
-
-	if (entries == 0) {
-		dir->tree[0]->size = -1;
-		dir->tree[0]->mode = 0;
-		strcpy(dir->tree[0]->name, "(empty)");
-		dir->count = 1;
 	}
 
 	return 0;
 }
 
-/* Quicksort algorithm pass, center element is the pivot */
-int
-quicksort_pass(Fileentry* *tree, int istart, int iend)
-{
-	int i, r, pi;
-	char *pivot;
-
-	pi = (istart+iend)/2;
-	pivot = tree[pi]->name;
-	tree_xchg(tree, pi, iend);
-
-	r = istart;
-
-	for (i=istart; i < iend; i++) {
-		if (strcasecmp(tree[i]->name, pivot) < 0)
-			tree_xchg(tree, i, r++);
-	}
-
-	tree_xchg(tree, r, iend);
-	return r;
-}
-
-/* Iterative implementation of quicksort */
+/* Iterative implementation of quicksort {{{*/
 void
 quicksort(Fileentry* *tree, int istart, int iend)
 {
@@ -375,8 +345,9 @@ quicksort(Fileentry* *tree, int istart, int iend)
 	int sp;
 	int p;
 
-	if (istart >= iend)
+	if (istart >= iend) {
 		return;
+	}
 
 	stack = safealloc(sizeof(*stack) * (iend - istart + 1));
 	sp = 0;
@@ -400,6 +371,30 @@ quicksort(Fileentry* *tree, int istart, int iend)
 	}
 	free(stack);
 }
+/*}}}*/
+/* Quicksort algorithm pass, center element is the pivot {{{*/
+int
+quicksort_pass(Fileentry* *tree, int istart, int iend)
+{
+	int i, r, pi;
+	char *pivot;
+
+	pi = (istart+iend)/2;
+	pivot = tree[pi]->name;
+	tree_xchg(tree, pi, iend);
+
+	r = istart;
+
+	for (i=istart; i < iend; i++) {
+		if (strcasecmp(tree[i]->name, pivot) < 0) {
+			tree_xchg(tree, i, r++);
+		}
+	}
+
+	tree_xchg(tree, r, iend);
+	return r;
+}
+/*}}}*/
 
 /* Alphabetically sort a directory listing, directories first
  * This looks ugly because I need to keep track of the element referencing

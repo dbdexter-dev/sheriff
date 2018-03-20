@@ -2,6 +2,7 @@
  * User configuration file. Contains the various keybindings and file
  * associations (and possibily other options in the future)
  */
+
 #include <ncurses.h>
 
 typedef struct {
@@ -23,6 +24,7 @@ static Assoc associations[] = {
 static Key c_multi[] = {
 	{ 'd',          quick_cd,           {0}},
 	{ 'w',          rename_cur,         {0}},
+	{ 'm',          chmod_cur,          {0}},
 	{ '\0',         NULL,               {0}},
 };
 
@@ -64,6 +66,8 @@ static Key keys[] = {
 	{ '',         rel_highlight,      {.i = +20}},
 	{ '?',          filesearch,         {.i = -1}},
 	{ '/',          filesearch,         {.i = +1}},
+	{ 'N',          filesearch,         {.i = -2}},
+	{ 'n',          filesearch,         {.i = +2}},
 	{ 'y',          chain,              {.v = y_multi}},
 	{ 'd',          chain,              {.v = d_multi}},
 	{ 'c',          chain,              {.v = c_multi}},

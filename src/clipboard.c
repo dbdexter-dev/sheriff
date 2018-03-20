@@ -1,11 +1,9 @@
-#define _XOPEN_SOURCE 700
-
+#include <assert.h>
 #include <pthread.h>
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include "clipboard.h"
 #include "dir.h"
@@ -20,17 +18,21 @@ struct pthr_clip_arg {
 	char *destpath;
 };
 
+static int  clip_clear(Clipboard *clip);
+static int  clip_clone(Clipboard *dest, Clipboard *src);
+static void* pthr_clip_exec(void *arg);
+
 static Clipboard m_clip;
 
-static int clip_clear(Clipboard *clip);
-static void *pthr_clip_exec(void *arg);
-
+/* Change the operation stored in the clipboard. Useful when a yank becomes a
+ * delete (aka yank_cur -> link_cur should make OP_COPY become OP_LINK) */
 int
 clip_change_op(enum clip_ops op)
 {
 	m_clip.op = op;
 	return 0;
 }
+
 /* Deallocate a clipboard object */
 int
 clip_deinit()
@@ -40,7 +42,6 @@ clip_deinit()
 	return 0;
 }
 
-
 /* Spawn a thread that will execute what the clipboard is holding */
 int
 clip_exec(char *destpath)
@@ -48,30 +49,23 @@ clip_exec(char *destpath)
 	struct pthr_clip_arg *arg;
 	pthread_attr_t wt_attr;
 	pthread_t thr;
-	sigset_t wt_sigset, wt_old_sigset;
 
 	arg = safealloc(sizeof(*arg));
-	arg->clip = &m_clip;
-	arg->destpath = safealloc(sizeof(*arg->destpath) * (strlen(destpath) + 1));
 
+	arg->clip = safealloc(sizeof(Clipboard));   /* Cobble up the thread args */
+	clip_clone(arg->clip, &m_clip);
+	arg->destpath = safealloc(sizeof(*arg->destpath) * (strlen(destpath) + 1));
 	sprintf(arg->destpath, "%s", destpath);
 
-	sigemptyset(&wt_sigset);
-	sigaddset(&wt_sigset, SIGUSR1);
-
-	pthread_attr_init(&wt_attr);
+	pthread_attr_init(&wt_attr);    /* Start the thread as a detached thread */
 	pthread_attr_setdetachstate(&wt_attr, PTHREAD_CREATE_DETACHED);
-
-	pthread_sigmask(SIG_SETMASK, &wt_sigset, &wt_old_sigset);
 	pthread_create(&thr, &wt_attr, pthr_clip_exec, arg);
-	pthread_sigmask(SIG_SETMASK, &wt_old_sigset, NULL);
-
 	pthread_attr_destroy(&wt_attr);
 
 	return 0;
 }
 
-/* Initialize a clipboard object */
+/* Initialize a clipboard object to null */
 int
 clip_init()
 {
@@ -93,7 +87,7 @@ clip_update(Direntry* dir, int op)
 }
 
 /* Static functions {{{*/
-/* Clear a clipboard */
+/* Clear a clipboard object */
 int
 clip_clear(Clipboard *clip)
 {
@@ -107,27 +101,65 @@ clip_clear(Clipboard *clip)
 	return 0;
 }
 
+/* Clone a clipboard */
+int
+clip_clone(Clipboard *dest, Clipboard *src)
+{
+	dest->op = src->op;
+
+	pthread_mutex_lock(&src->mutex);
+	assert(!snapshot_tree_selected(&dest->dir, src->dir));
+	pthread_mutex_unlock(&src->mutex);
+
+	return 0;
+}
+
 /* Execute the action specified in a clipboard over the files in the clipboard */
 void *
 pthr_clip_exec(void *arg)
 {
-	int i;
+	int i, status;
+	unsigned count;
+	mode_t mode;
 	char *tmpsrc, *tmpdest;
+	Progress *pr;
 	Clipboard *clip;
 	char *destpath;
 
+	/* NOTE: destpath here is improperly named, as it can also contain the
+	 * permissions to give to the files coded in octal. This isn't too bad,
+	 * since a chmod doesn't need a destpath */
 	clip = ((struct pthr_clip_arg*)arg)->clip;
 	destpath = ((struct pthr_clip_arg*)arg)->destpath;
+	status = 0;
 
-	pthread_mutex_lock(&clip->mutex);
+	/* Estimate how many files we have to work with */
+	count = 0;
+	for (i=0; i<clip->dir->count; i++) {
+		tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
+		count += enumerate_dir(tmpsrc);
+		free(tmpsrc);
+	}
 
+	pr = fileop_progress();
+	pthread_mutex_lock(&pr->mutex);
+	pr->obj_count += count;
+	pthread_mutex_unlock(&pr->mutex);
+
+	/* Execute whatever the clipboard is holding, on every file the clipboard is
+	 * holding. Yes, I could have done a single for loop; No, I don't think this
+	 * is bad. I'm actually reading clip->op only once instead of doing so in
+	 * every loop */
 	if (clip->dir) {
 		switch(clip->op) {
 		case OP_COPY:
 			for (i=0; i<clip->dir->count; i++) {
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
-				copy_file(tmpsrc, tmpdest);
+				status |= copy_file(tmpsrc, tmpdest);
+				pthread_mutex_lock(&pr->mutex);
+				pr->fname = NULL;
+				pthread_mutex_unlock(&pr->mutex);
 				free(tmpsrc);
 				free(tmpdest);
 			}
@@ -136,7 +168,10 @@ pthr_clip_exec(void *arg)
 			for (i=0; i<clip->dir->count; i++) {
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
-				move_file(tmpsrc, tmpdest);
+				status |= move_file(tmpsrc, tmpdest);
+				pthread_mutex_lock(&pr->mutex);
+				pr->fname = NULL;
+				pthread_mutex_unlock(&pr->mutex);
 				free(tmpsrc);
 				free(tmpdest);
 			}
@@ -145,7 +180,10 @@ pthr_clip_exec(void *arg)
 			for (i=0; i<clip->dir->count; i++) {
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
 				tmpdest = join_path(destpath, clip->dir->tree[i]->name);
-				link_file(tmpsrc, tmpdest);
+				status |= link_file(tmpsrc, tmpdest);
+				pthread_mutex_lock(&pr->mutex);
+				pr->fname = NULL;
+				pthread_mutex_unlock(&pr->mutex);
 				free(tmpsrc);
 				free(tmpdest);
 			}
@@ -153,22 +191,42 @@ pthr_clip_exec(void *arg)
 		case OP_DELETE:
 			for (i=0; i<clip->dir->count; i++) {
 				tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
-				delete_file(tmpsrc);
+				status |= delete_file(tmpsrc);
+				pthread_mutex_lock(&pr->mutex);
+				pr->fname = NULL;
+				pthread_mutex_unlock(&pr->mutex);
 				free(tmpsrc);
 			}
 			break;
-		case OP_RENAME:
+		case OP_CHMOD:
+			mode = atoo(destpath);  /* Convert from octal string to int */
+			if (mode > 0) {
+				for (i=0; i<clip->dir->count; i++) {
+					tmpsrc = join_path(clip->dir->path, clip->dir->tree[i]->name);
+					status |= chmod_file(tmpsrc, mode);
+					pthread_mutex_lock(&pr->mutex);
+					pr->fname = NULL;
+					pthread_mutex_unlock(&pr->mutex);
+					free(tmpsrc);
+				}
+			}
 			break;
 		default:
 			break;
 		}
 	}
 
-	pthread_mutex_unlock(&clip->mutex);
+	pthread_mutex_lock(&pr->mutex);
+	pr->obj_count -= count;
+	pr->obj_done -= count;
+	pthread_mutex_unlock(&pr->mutex);
+
 	free(destpath);
 	/* Signal the main thread that the current directory contents have changed */
 	queue_master_update();
 	/* arg was passed on the heap to prevent it being overwritten */
+	free_listing(&clip->dir);
+	free(clip);
 	free(arg);
 	return NULL;
 }

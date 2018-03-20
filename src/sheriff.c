@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 700
-
 #include <assert.h>
 #include <dirent.h>
 #include <locale.h>
@@ -12,8 +10,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "backend.h"
-#include "dir.h"
 #include "clipboard.h"
+#include "dir.h"
+#include "fileops.h"
 #include "ncutils.h"
 #include "sheriff.h"
 #include "tabs.h"
@@ -46,6 +45,7 @@ static void  xdg_open(Direntry *file);
 /* Functions that can be used in config.h */
 static void  abs_highlight(const Arg *arg);
 static void  chain(const Arg *arg);
+static void  chmod_cur(const Arg *arg);
 static void  delete_cur(const Arg *arg);
 static void  filesearch(const Arg *arg);
 static void  link_cur(const Arg *arg);
@@ -160,11 +160,14 @@ void
 filesearch(const Arg *arg)
 {
 	int i, found;
-	char fname[MAXSEARCHLEN+1];
+	static char fname[MAXSEARCHLEN+1];
 	char *fullpath;
 	const Direntry *dir = m_view[CENTER].ctx->dir;
 
-	dialog(m_view[BOT].win, fname, arg->i > 0 ? "/" : "?");
+	if (arg->i == 1 || arg->i == -1) {
+		dialog(m_view[BOT].win, fname, arg->i > 0 ? "/" : "?");
+	}
+
 	if (*fname == '\0') {
 		return;
 	}
@@ -240,6 +243,19 @@ chain(const Arg *arg)
 	wtimeout(m_view[BOT].win, UPD_INTERVAL);
 }
 
+void
+chmod_cur(const Arg *arg)
+{
+	char modestr[MAXCMDLEN+1];  /* Oversized, I know... */
+	dialog(m_view[BOT].win, modestr, "chmod: ");
+
+	if (modestr[0] != '\0') {
+		clip_update(m_view[CENTER].ctx->dir, OP_CHMOD);
+		m_view[CENTER].ctx->visual = 0;
+		clip_exec(modestr);
+	}
+}
+
 /* Handle navigation, either forward or backwards, through directories or
  * files */
 void
@@ -265,24 +281,22 @@ navigate(const Arg *arg)
 	}
 }
 
-/* Clone the current tab */
+/* Clone the current tab, and switch to it */
 void
 tab_clone(const Arg *arg)
 {
 	const char *path;
-	const Arg zero = {.i = 0};
 
 	path = m_view[CENTER].ctx->dir->path;
 	tabctx_append(path);
-
-	rel_tabswitch(&zero);
+	abs_tabswitch(0);
 }
 
 /* Delete the current tab, and exit if there are no tabs left */
 void
 tab_delete(const Arg *arg)
 {
-	const Arg zero = {.i = 0};
+	const Arg zero = {.i = 1};
 
 	if (tabctx_remove(cur_tab)) {
 		ungetch('q');
@@ -409,17 +423,23 @@ int
 direct_cd(char *path)
 {
 	char *fullpath;
-	int status;
+	int i, status;
 	struct stat st;
 
 	status = 0;
 
 	if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
-		fullpath = join_path(path, "../");
+		status |= init_pane_with_path(m_view[CENTER].ctx, path);
+		fullpath = join_path(path, m_view[CENTER].ctx->dir->tree[0]->name);
+		status |= init_pane_with_path(m_view[RIGHT].ctx, fullpath);
+		for (i = strlen(fullpath); fullpath[i] != '/' && i > 0; i--)
+			;
+		for (i--; fullpath[i] != '/' && i > 0; i--)
+			;
+		fullpath[i+1] = '\0';
+
 		status |= init_pane_with_path(m_view[LEFT].ctx, fullpath);
 		free(fullpath);
-		status |= init_pane_with_path(m_view[CENTER].ctx, path);
-		status |= init_pane_with_path(m_view[RIGHT].ctx, path);
 
 		status |= render_tree(m_view + LEFT, 0);
 		status |= render_tree(m_view + CENTER, 1);
@@ -490,7 +510,12 @@ exit_directory()
 void
 queue_master_update()
 {
-	sem_post(&m_update_sem);
+	int sem_val;
+
+	sem_getvalue(&m_update_sem, &sem_val);
+	if (sem_val < 1) {
+		sem_post(&m_update_sem);
+	}
 }
 
 /* Handler that takes care of resizing the subviews when KEY_RESIZE is received.
@@ -656,6 +681,7 @@ main(int argc, char *argv[])
 
 	windows_init(m_view, max_row, max_col, pane_proportions);
 	keypad(m_view[BOT].win, TRUE);
+	fileops_init();
 
 	path = realpath(".", NULL);
 	tabctx_append(path);
@@ -686,6 +712,7 @@ main(int argc, char *argv[])
 	/* Terminate ncurses session */
 	sem_destroy(&m_update_sem);
 	windows_deinit(m_view);
+	fileops_deinit();
 	tabctx_deinit();
 	clip_deinit();
 	endwin();

@@ -42,6 +42,7 @@ typedef struct {
 
 void clear_dir_selection(Direntry *direntry);
 void dir_toggle_hidden();
+int  exact_file_idx(const Direntry *dir, const char *fname);
 int  fuzzy_file_idx(const Direntry *dir, const char *fname, int start_idx);
 int  free_listing(Direntry **direntry);
 int  init_listing(Direntry **direntry, const char *path);

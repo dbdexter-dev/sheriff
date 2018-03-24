@@ -41,6 +41,22 @@ dir_toggle_hidden()
 	m_include_hidden ^= 1;
 }
 
+/* Return the index of a given file inside a Direntry struct. Matches only exact
+ * names, unlike fuzzy_file_idx() */
+int
+exact_file_idx(const Direntry *dir, const char *fname)
+{
+	int i;
+
+	for (i = 0; i < dir->count; i++) {
+		if (!strcmp(fname, dir->tree[i]->name)) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
 /* Find a file given a partial name, returning its index inside the dir->tree
  * array. This function searches from start_idx towards the bottom, wrapping
  * around if necessary */
@@ -120,7 +136,7 @@ init_listing(Direntry **direntry, const char *path)
 
 	if (path) {                 /* If path isn't null, make a listing of it */
 		(*direntry)->path = realpath(path, NULL);
-		populate_listing(*direntry, path);
+		populate_listing(*direntry, (*direntry)->path);
 		sort_tree(*direntry);
 		clear_dir_selection(*direntry);
 	}

@@ -23,6 +23,20 @@ atoo(const char *str)
 	return octal;
 }
 
+const char*
+extract_filename(const char *path)
+{
+	const char *ret;
+
+	for (ret = (path + strlen(path) - 1); ret >= path; ret--) {
+		if (*ret == '/') {
+			return ret+1;
+		}
+	}
+
+	return NULL;
+}
+
 /* Check if a directory is "." or ".." more efficiently than calling strcmp
  * twice */
 int

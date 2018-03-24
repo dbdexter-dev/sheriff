@@ -17,7 +17,9 @@ tabctx_append(const char *path)
 	char *tmp;
 	TabCtx *ptr;
 
-	/* Allocate another element and insert it at the beginning of the list */
+	/* Allocate another element and insert it at the beginning of the list. Note
+	 * that ptr doesn't have to be freed, since it becomes a part of the linked
+	 * list. It'll be taken care of when the related tab is destroyed */
 	ptr = safealloc(sizeof(*ptr));
 	ptr->next = m_ctx;
 	m_ctx = ptr;
@@ -28,11 +30,20 @@ tabctx_append(const char *path)
 
 	/* Initialize left with ${path}/../, center with ${path}, right with
 	 * ${path}/${center[0]}, if this makes any sense */
-	tmp = join_path(path, "..");
+	init_pane_with_path(ptr->center, path);
+
+	tmp = join_path(path, "../");
 	init_pane_with_path(ptr->left, tmp);
 	free(tmp);
 
-	init_pane_with_path(ptr->center, path);
+	/* Highlight the correct entry in the left pane */
+	tmp = (char*) extract_filename(ptr->center->dir->path);
+	if (tmp) {
+		ptr->left->dir->sel_idx = exact_file_idx(ptr->left->dir, tmp);
+		if (ptr->left->dir->sel_idx < 0) {
+			ptr->left->dir->sel_idx = 0;
+		}
+	}
 
 	tmp = join_path(path, ptr->center->dir->tree[0]->name);
 	if (S_ISDIR(ptr->center->dir->tree[0]->mode)) {
@@ -41,6 +52,7 @@ tabctx_append(const char *path)
 		init_pane_with_path(ptr->right, NULL);
 	}
 	free(tmp);
+
 
 	m_tabcount++;
 	return 0;

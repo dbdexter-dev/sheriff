@@ -53,6 +53,15 @@ navigate_back(PaneCtx *left, PaneCtx *center, PaneCtx *right)
 	init_pane_with_path(left, leftpath);
 	free(leftpath);
 
+	/* Highlight the correct entry in the left pane */
+	leftpath = (char*) extract_filename(center->dir->path);
+	if (leftpath) {
+		left->dir->sel_idx = exact_file_idx(left->dir, leftpath);
+		if (left->dir->sel_idx < 0) {
+			left->dir->sel_idx = 0;
+		}
+	}
+
 	return 0;
 }
 

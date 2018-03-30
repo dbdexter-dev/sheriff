@@ -84,7 +84,7 @@ render_tree(Dirview *win, int show_sizes)
 		} else {
 			/* Convert byte count to human-readable size */
 			tohuman(tmpfile->size, humansize);
-			strchomp(tmpfile->name, tmpstring, mc - HUMANSIZE_LEN - 1);
+			strchomp(tmpfile->name, tmpstring, mc - HUMANSIZE_LEN - 3);
 
 			wprintw(win->win, "%s", tmpstring);
 			mvwprintw(win->win, i - ctx->offset, mc - HUMANSIZE_LEN - 1,

@@ -161,12 +161,11 @@ tohuman(unsigned long bytes, char *human)
 	if (bytes < 1000) {
 		sprintf(human, "%lu %c", bytes, suffix[0]);
 	} else {
-		/* Integer divide until the last moment */
 		for (exp_3 = 0, fbytes = bytes; fbytes > 1000; fbytes /= 1000, exp_3++)
 			;
-		if (fbytes >= 100) {
+		if (fbytes > 99.9) {
 			sprintf(human, "%3.f %c", fbytes, suffix[exp_3]);
-		} else if (fbytes >= 10) {
+		} else if (fbytes > 9.99) {
 			sprintf(human, "%3.1f %c", fbytes, suffix[exp_3]);
 		} else {
 			sprintf(human, "%3.2f %c", fbytes, suffix[exp_3]);

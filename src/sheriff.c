@@ -44,6 +44,7 @@ static void  xdg_open(Direntry *file);
 static void  abs_highlight(const Arg *arg);
 static void  chain(const Arg *arg);
 static void  chmod_cur(const Arg *arg);
+static void  clear_sel(const Arg *arg);
 static void  delete_cur(const Arg *arg);
 static void  filesearch(const Arg *arg);
 static void  link_cur(const Arg *arg);
@@ -131,6 +132,55 @@ abs_tabswitch(int idx)
 	return idx;
 }
 
+/* Meta-keybinding function, so that you can chain multiple characters together
+ * to perform a single action */
+void
+chain(const Arg *arg)
+{
+	wchar_t ch;
+	int i;
+	Key *binds = arg->v;
+
+	wtimeout(m_view[BOT].win, -1);
+	do {
+		/* Handle resize events while waiting for input */
+		ch = wgetch(m_view[BOT].win);
+		if (ch == KEY_RESIZE) {
+			resize_handler();
+		} else if (ch != KEY_EXIT) {
+			/* Exit means exit, duh */
+			for (i=0; binds[i].key != '\0'; i++) {
+				if (ch == binds[i].key) {
+					binds[i].funct(&binds[i].arg);
+				}
+			}
+		}
+	} while (ch == KEY_RESIZE);
+	wtimeout(m_view[BOT].win, UPD_INTERVAL);
+}
+
+void
+chmod_cur(const Arg *arg)
+{
+	char modestr[MAXCMDLEN+1];  /* Oversized, I know... */
+	dialog(m_view[BOT].win, modestr, "chmod: ");
+
+	if (modestr[0] != '\0') {
+		clip_update(m_view[CENTER].ctx->dir, OP_CHMOD);
+		m_view[CENTER].ctx->visual = 0;
+		clip_exec(modestr);
+	}
+}
+
+
+void
+clear_sel(const Arg *arg)
+{
+	clear_dir_selection(m_view[CENTER].ctx->dir);
+	visualmode_toggle(NULL);
+	render_tree(m_view + CENTER, 1);
+}
+
 void
 delete_cur(const Arg *arg)
 {
@@ -183,46 +233,6 @@ link_cur(const Arg *arg)
 {
 	clip_change_op(OP_LINK);
 	paste_cur(NULL);
-}
-
-/* Meta-keybinding function, so that you can chain multiple characters together
- * to perform a single action */
-void
-chain(const Arg *arg)
-{
-	wchar_t ch;
-	int i;
-	Key *binds = arg->v;
-
-	wtimeout(m_view[BOT].win, -1);
-	do {
-		/* Handle resize events while waiting for input */
-		ch = wgetch(m_view[BOT].win);
-		if (ch == KEY_RESIZE) {
-			resize_handler();
-		} else if (ch != KEY_EXIT) {
-			/* Exit means exit, duh */
-			for (i=0; binds[i].key != '\0'; i++) {
-				if (ch == binds[i].key) {
-					binds[i].funct(&binds[i].arg);
-				}
-			}
-		}
-	} while (ch == KEY_RESIZE);
-	wtimeout(m_view[BOT].win, UPD_INTERVAL);
-}
-
-void
-chmod_cur(const Arg *arg)
-{
-	char modestr[MAXCMDLEN+1];  /* Oversized, I know... */
-	dialog(m_view[BOT].win, modestr, "chmod: ");
-
-	if (modestr[0] != '\0') {
-		clip_update(m_view[CENTER].ctx->dir, OP_CHMOD);
-		m_view[CENTER].ctx->visual = 0;
-		clip_exec(modestr);
-	}
 }
 
 /* Handle navigation, either forward or backwards, through directories or
@@ -367,8 +377,10 @@ toggle_hidden(const Arg *arg)
 void
 visualmode_toggle(const Arg *arg)
 {
+	if (!m_view[CENTER].ctx->visual) {
+		m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected = 1;
+	}
 	m_view[CENTER].ctx->visual ^= 1;
-	m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected ^= 1;
 	render_tree(m_view + CENTER, 1);
 }
 
@@ -399,7 +411,13 @@ direct_cd(char *path)
 	if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
 		init_pane_with_path(m_view[CENTER].ctx, path);
 		fullpath = join_path(path, m_view[CENTER].ctx->dir->tree[0]->name);
-		init_pane_with_path(m_view[RIGHT].ctx, fullpath);
+
+		if (S_ISDIR(m_view[CENTER].ctx->dir->tree[0]->mode)) {
+			init_pane_with_path(m_view[RIGHT].ctx, fullpath);
+		} else {
+			init_pane_with_path(m_view[RIGHT].ctx, NULL);
+		}
+
 		for (i = strlen(fullpath); fullpath[i] != '/' && i > 0; i--)
 			;
 		for (i--; fullpath[i] != '/' && i > 0; i--)
@@ -646,10 +664,10 @@ main(int argc, char *argv[])
 	use_default_colors();                  /* Enable default 16 colors */
 	start_color();
 	init_colors();
-	keypad(m_view[BOT].win, TRUE);
 
 	getmaxyx(stdscr, max_row, max_col);
 	windows_init(m_view, max_row, max_col, pane_proportions);
+	keypad(m_view[BOT].win, TRUE);
 
 	/* Initialize windows with the current path */
 	fileops_init();

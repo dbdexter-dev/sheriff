@@ -45,6 +45,11 @@ static Key p_multi[] = {
 	{ '\0',         NULL,               {0}},
 };
 
+static Key u_multi[] = {
+	{ 'v',          clear_sel,          {0}},
+	{ '\0',         NULL,               {0}},
+};
+
 static Key y_multi[] = {
 	{ 'y',          yank_cur,           {.i = 1}},
 	{ '\0',         NULL,               {0}},
@@ -78,6 +83,7 @@ static Key keys[] = {
 	{ 'x',          tab_delete,         {0}},
 	{ '',         refresh_all,        {0}},
 	{ 'H',          toggle_hidden,      {0}},
+	{ 'u',          chain,              {.v = u_multi}},
 /*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };

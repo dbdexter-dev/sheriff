@@ -48,6 +48,7 @@ static void  clear_sel(const Arg *arg);
 static void  delete_cur(const Arg *arg);
 static void  filesearch(const Arg *arg);
 static void  link_cur(const Arg *arg);
+static void  makedir(const Arg *arg);
 static void  navigate(const Arg *arg);
 static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
@@ -58,6 +59,7 @@ static void  rename_cur(const Arg *arg);
 static void  tab_clone(const Arg *arg);
 static void  tab_delete(const Arg *arg);
 static void  toggle_hidden(const Arg *arg);
+static void  touch(const Arg *arg);
 static void  visualmode_toggle(const Arg *arg);
 static void  yank_cur(const Arg *arg);
 
@@ -189,11 +191,14 @@ delete_cur(const Arg *arg)
 	       "Are you sure you want to delete all the selected files? (yes/no) ");
 
 	if ((ans[0] & 0xDF) == 'Y') {
+		dialog(m_view[BOT].win, NULL, "Deleting...");
+
 		clip_update(m_view[CENTER].ctx->dir, OP_DELETE);
 		clear_dir_selection(m_view[CENTER].ctx->dir);
 		m_view[CENTER].ctx->visual = 0;
 		clip_exec(m_view[CENTER].ctx->dir->path);
 	}
+
 }
 
 /* File search, both forwards and backwards */
@@ -233,6 +238,21 @@ link_cur(const Arg *arg)
 {
 	clip_change_op(OP_LINK);
 	paste_cur(NULL);
+}
+
+/* Make a directory in the current path */
+void
+makedir(const Arg *arg)
+{
+	char name[NAME_MAX+1];
+
+	dialog(m_view[BOT].win, name, "mkdir: ");
+	if (name[0]) {
+		file_mkdir(name, m_view[CENTER].ctx->dir->path);
+	}
+
+	rescan_pane(m_view[CENTER].ctx);
+	render_tree(m_view + CENTER, 1);
 }
 
 /* Handle navigation, either forward or backwards, through directories or
@@ -371,6 +391,20 @@ toggle_hidden(const Arg *arg)
 {
 	dir_toggle_hidden();
 	queue_master_update();
+}
+
+void
+touch(const Arg *arg)
+{
+	char name[NAME_MAX+1];
+
+	dialog(m_view[BOT].win, name, "touch: ");
+	if (name[0]) {
+		file_touch(name, m_view[CENTER].ctx->dir->path);
+	}
+
+	rescan_pane(m_view[CENTER].ctx);
+	render_tree(m_view + CENTER, 1);
 }
 
 /* Toggle visual selection mode */
@@ -608,10 +642,16 @@ xdg_open(Direntry *dir)
 				break;
 			}
 		}
-		/* Ask the user for a command to open the file with */
-		if (!associated) {
-			dialog(m_view[BOT].win, cmd, "open_with: ");
-		}
+	}
+
+	/* Ask the user for a command to open the file with */
+	if (!associated) {
+		dialog(m_view[BOT].win, cmd, "open_with: ");
+	}
+
+	/* cmd[0] == '\0' means that the user didn't input anything */
+	if (!cmd[0]) {
+		return;
 	}
 
 	/* Leave curses mode */

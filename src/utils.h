@@ -8,7 +8,7 @@
 #include <stdlib.h>
 
 int   atoo(const char *str);
-const char* extract_filename(const char *path);
+char* extract_filename(const char *path);
 int   is_dot_or_dotdot(char *name);
 char* join_path(const char *parent, const char *child);
 void  octal_to_str(int oct, char str[]);

@@ -23,12 +23,12 @@ atoo(const char *str)
 	return octal;
 }
 
-const char*
+char*
 extract_filename(const char *path)
 {
-	const char *ret;
+	char *ret;
 
-	for (ret = (path + strlen(path) - 1); ret >= path; ret--) {
+	for (ret = (char*)(path + strlen(path) - 1); ret >= path; ret--) {
 		if (*ret == '/') {
 			return ret+1;
 		}

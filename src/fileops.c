@@ -120,6 +120,36 @@ move_file(char *src, char *dest)
 	return retval;
 }
 
+/* Create a directory in the specified path, default mode is 0755 TODO: possibly
+ * allow changing that mode to something else */
+int
+file_mkdir(const char *name, const char *path)
+{
+	char *tmp;
+	int ret;
+
+	tmp = join_path(path, name);
+	ret = mkdir(tmp, MODE_DEFAULT);
+	free(tmp);
+
+	return ret;
+}
+
+/* Create a new file with the specified name */
+int
+file_touch(const char *name, const char *path)
+{
+	char *tmp;
+	int fd;
+
+	tmp = join_path(path, name);
+	fd = open(tmp, O_WRONLY|O_CREAT, MODE_DEFAULT);
+	close(fd);
+	free(tmp);
+
+	return 0;
+}
+
 /* Static functions {{{ */
 /* Enumerate a directory contents to guesstimate how long an operation will
  * approximately take. Note than a finer-grained estimate would slow down the

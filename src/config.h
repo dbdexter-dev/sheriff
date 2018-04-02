@@ -15,6 +15,8 @@ static int pane_proportions[] = { 1, 4, 2 };
 static Assoc associations[] = {
 	{ ".pdf",   "zathura"},
 	{ ".c",     "nvim"},
+	{ ".h",     "nvim"},
+	{ ".txt",   "nvim"},
 	{ ".mkv",   "mpv"},
 	{ ".mp3",   "mpv"},
 	{ ".flac",  "mpv"},
@@ -36,6 +38,12 @@ static Key d_multi[] = {
 
 static Key g_multi[] = {
 	{ 'g',          abs_highlight,      {.i = 0}},
+	{ '\0',         NULL,               {0}},
+};
+
+static Key i_multi[] = {
+	{ 'd',          makedir,            {0}},
+	{ 'f',          touch,              {0}},
 	{ '\0',         NULL,               {0}},
 };
 
@@ -84,6 +92,7 @@ static Key keys[] = {
 	{ '',         refresh_all,        {0}},
 	{ 'H',          toggle_hidden,      {0}},
 	{ 'u',          chain,              {.v = u_multi}},
+	{ 'i',          chain,              {.v = i_multi}},
 /*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };

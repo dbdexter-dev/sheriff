@@ -15,6 +15,8 @@ static int pane_proportions[] = { 1, 4, 2 };
 static Assoc associations[] = {
 	{ ".pdf",   "zathura"},
 	{ ".c",     "nvim"},
+	{ ".h",     "nvim"},
+	{ ".txt",   "nvim"},
 	{ ".mkv",   "mpv"},
 	{ ".mp3",   "mpv"},
 	{ ".flac",  "mpv"},
@@ -39,9 +41,20 @@ static Key g_multi[] = {
 	{ '\0',         NULL,               {0}},
 };
 
+static Key i_multi[] = {
+	{ 'd',          makedir,            {0}},
+	{ 'f',          touch,              {0}},
+	{ '\0',         NULL,               {0}},
+};
+
 static Key p_multi[] = {
 	{ 'p',          paste_cur,          {0}},
 	{ 'l',          link_cur,           {0}},
+	{ '\0',         NULL,               {0}},
+};
+
+static Key u_multi[] = {
+	{ 'v',          clear_sel,          {0}},
 	{ '\0',         NULL,               {0}},
 };
 
@@ -64,10 +77,8 @@ static Key keys[] = {
 	{ '',         rel_highlight,      {.i = +5}},
 	{ '',         rel_highlight,      {.i = -20}},
 	{ '',         rel_highlight,      {.i = +20}},
-	{ '?',          filesearch,         {.i = -1}},
-	{ '/',          filesearch,         {.i = +1}},
-	{ 'N',          filesearch,         {.i = -2}},
-	{ 'n',          filesearch,         {.i = +2}},
+	{ '/',          filesearch,         {.i = 0}},
+	{ 'n',          filesearch,         {.i = +1}},
 	{ 'y',          chain,              {.v = y_multi}},
 	{ 'd',          chain,              {.v = d_multi}},
 	{ 'c',          chain,              {.v = c_multi}},
@@ -80,6 +91,8 @@ static Key keys[] = {
 	{ 'x',          tab_delete,         {0}},
 	{ '',         refresh_all,        {0}},
 	{ 'H',          toggle_hidden,      {0}},
+	{ 'u',          chain,              {.v = u_multi}},
+	{ 'i',          chain,              {.v = i_multi}},
 /*	{ '!',          shell_exec,         {0}}, */
 	{ '\0',         NULL,               {0}},
 };

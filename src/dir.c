@@ -41,6 +41,43 @@ dir_toggle_hidden()
 	m_include_hidden ^= 1;
 }
 
+/* Return the index of a given file inside a Direntry struct. Matches only exact
+ * names, unlike fuzzy_file_idx() */
+int
+exact_file_idx(const Direntry *dir, const char *fname)
+{
+	int i;
+
+	for (i = 0; i < dir->count; i++) {
+		if (!strcmp(fname, dir->tree[i]->name)) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+/* Find a file given a partial name, returning its index inside the dir->tree
+ * array. This function searches from start_idx towards the bottom, wrapping
+ * around if necessary */
+int
+fuzzy_file_idx(const Direntry *dir, const char *fname, int start_idx)
+{
+	int i;
+
+	if (*fname == '\0' || start_idx > dir->count) {
+		return -1;
+	}
+
+	for (i = start_idx; i < dir->count+start_idx; i++) {
+		if (strcasestr(dir->tree[i%dir->count]->name, fname)) {
+			return i % dir->count;
+		}
+	}
+
+	return -1;
+}
+
 /* Free memory associated with a Direntry, marking it as not allocated once it
  * has been fully deallocated */
 int
@@ -60,6 +97,7 @@ free_listing(Direntry **direntry)
 		}
 		free((*direntry)->tree);
 		(*direntry)->tree = NULL;
+		(*direntry)->max_nodes = 0;
 	}
 
 	/* If there's a path associated to the direntry, free it */
@@ -75,7 +113,7 @@ free_listing(Direntry **direntry)
 }
 
 /* Populate a direntry structure with a directory listing. If path is NULL,
- * don't populate it, set direntry->path to NULL and return */
+ * don't populate it, just set direntry->path to NULL and return */
 int
 init_listing(Direntry **direntry, const char *path)
 {
@@ -98,10 +136,11 @@ init_listing(Direntry **direntry, const char *path)
 
 	if (path) {                 /* If path isn't null, make a listing of it */
 		(*direntry)->path = realpath(path, NULL);
-		populate_listing(*direntry, path);
+		populate_listing(*direntry, (*direntry)->path);
 		sort_tree(*direntry);
 		clear_dir_selection(*direntry);
-	} 
+	}
+
 	(*direntry)->sel_idx = 0;
 	return 0;
 }
@@ -134,14 +173,14 @@ snapshot_tree_selected(Direntry **dest, Direntry *src)
 
 	src->tree[src->sel_idx]->selected = 1;  /* Mark current elem as selected */
 
-	/* Count the elemnts that are selected */
+	/* Count the elements that are selected */
 	for (i=0, select_count=0; i<src->count; i++) {
 		if (src->tree[i]->selected) {
 			select_count++;
 		}
 	}
 
-	if (!select_count) {    /* Return if there are no elements selected */
+	if (!select_count) {        /* Return if there are no elements selected */
 		return 0;
 	}
 

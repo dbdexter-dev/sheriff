@@ -1,7 +1,7 @@
 /**
  * Functions that operate on a Clipboard struct are defined here.
  * A Clipboard struct contains a snapshot of the files to operate on, as well as
- * the operation to apply to these files. The mutex prevents things like a 
+ * the operation to apply to these files. The mutex prevents things like a
  * deallocation from happening while a copy is in progress.
  */
 

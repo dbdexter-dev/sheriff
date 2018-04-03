@@ -32,8 +32,6 @@ typedef struct {
 	const Arg arg;
 } Key;
 
-char *realpath(const char *path, char *resolved_path);
-
 static int   abs_tabswitch(int idx);
 static int   direct_cd(char *center_path);
 static int   enter_directory();
@@ -46,9 +44,11 @@ static void  xdg_open(Direntry *file);
 static void  abs_highlight(const Arg *arg);
 static void  chain(const Arg *arg);
 static void  chmod_cur(const Arg *arg);
+static void  clear_sel(const Arg *arg);
 static void  delete_cur(const Arg *arg);
 static void  filesearch(const Arg *arg);
 static void  link_cur(const Arg *arg);
+static void  makedir(const Arg *arg);
 static void  navigate(const Arg *arg);
 static void  paste_cur(const Arg *arg);
 static void  quick_cd(const Arg *arg);
@@ -59,13 +59,10 @@ static void  rename_cur(const Arg *arg);
 static void  tab_clone(const Arg *arg);
 static void  tab_delete(const Arg *arg);
 static void  toggle_hidden(const Arg *arg);
+static void  touch(const Arg *arg);
 static void  visualmode_toggle(const Arg *arg);
 static void  yank_cur(const Arg *arg);
 
-/* This is the only variable I can't make non-global
- * since it is needed by the SIGWINCH handler and the various
- * keybind handlers
- */
 static Dirview m_view[WIN_NR];
 static int cur_tab = 0;
 static sem_t m_update_sem;
@@ -128,92 +125,13 @@ abs_highlight(const Arg *arg)
 	return;
 }
 
-/* Switch to the idxth tab */
+/* Switch to the idxth tab. Returns the effectively selected idx (in case a
+ * wrap around happens or something) */
 int
 abs_tabswitch(int idx)
 {
-	TabCtx *switch_dest;
-
-	switch_dest = tabctx_by_idx(&idx);
-	tab_switch(m_view, switch_dest);
-
+	tab_switch(m_view, tabctx_by_idx(&idx));
 	return idx;
-}
-
-void
-delete_cur(const Arg *arg)
-{
-	char ans[16];
-	dialog(m_view[BOT].win, ans,
-	       "Are you sure you want to delete all the selected files? (yes/no) ");
-
-	if ((ans[0] & 0xDF) == 'Y' || ans[0] == '\0') {
-		clip_update(m_view[CENTER].ctx->dir, OP_DELETE);
-		clear_dir_selection(m_view[CENTER].ctx->dir);
-		m_view[CENTER].ctx->visual = 0;
-		clip_exec(m_view[CENTER].ctx->dir->path);
-	}
-}
-
-/* File search, both forwards and backwards, depending on the value of arg->i */
-void
-filesearch(const Arg *arg)
-{
-	int i, found;
-	static char fname[MAXSEARCHLEN+1];
-	char *fullpath;
-	const Direntry *dir = m_view[CENTER].ctx->dir;
-
-	if (arg->i == 1 || arg->i == -1) {
-		dialog(m_view[BOT].win, fname, arg->i > 0 ? "/" : "?");
-	}
-
-	if (*fname == '\0') {
-		return;
-	}
-
-	/* Basically, go through all the elements from the currently selected one to
-	 * the very [beginning | end], exiting once a match is found. TODO: add the
-	 * ability to quickly redo the search */
-	found = 0;
-	if (arg->i > 0) {
-		for (i=m_view[CENTER].ctx->dir->sel_idx+1; i<dir->count; i++) {
-			if (strcasestr(dir->tree[i]->name, fname)) {
-				m_view[CENTER].ctx->dir->sel_idx = i;
-				found = 1;
-				break;
-			}
-		}
-	} else {
-		for (i=m_view[CENTER].ctx->dir->sel_idx-1; i>=0; i--) {
-			if (strcasestr(dir->tree[i]->name, fname)) {
-				m_view[CENTER].ctx->dir->sel_idx = i;
-				found = 1;
-				break;
-			}
-		}
-	}
-
-	/* If a match has been found, update the right pane and repaint it, checking
-	 * whether the selected file is a directory */
-	if (found) {
-		if (S_ISDIR(dir->tree[dir->sel_idx]->mode)) {
-			fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
-			init_pane_with_path(m_view[RIGHT].ctx, fullpath);
-			free(fullpath);
-		} else {
-			init_pane_with_path(m_view[RIGHT].ctx, NULL);
-		}
-		render_tree(m_view + RIGHT, 0);
-		render_tree(m_view + CENTER, 1);
-	}
-}
-
-void
-link_cur(const Arg *arg)
-{
-	clip_change_op(OP_LINK);
-	paste_cur(NULL);
 }
 
 /* Meta-keybinding function, so that you can chain multiple characters together
@@ -254,6 +172,87 @@ chmod_cur(const Arg *arg)
 		m_view[CENTER].ctx->visual = 0;
 		clip_exec(modestr);
 	}
+}
+
+
+void
+clear_sel(const Arg *arg)
+{
+	clear_dir_selection(m_view[CENTER].ctx->dir);
+	visualmode_toggle(NULL);
+	render_tree(m_view + CENTER, 1);
+}
+
+void
+delete_cur(const Arg *arg)
+{
+	char ans[MAXCMDLEN+1];
+	dialog(m_view[BOT].win, ans,
+	       "Are you sure you want to delete all the selected files? (yes/no) ");
+
+	if ((ans[0] & 0xDF) == 'Y') {
+		dialog(m_view[BOT].win, NULL, "Deleting...");
+
+		clip_update(m_view[CENTER].ctx->dir, OP_DELETE);
+		clear_dir_selection(m_view[CENTER].ctx->dir);
+		m_view[CENTER].ctx->visual = 0;
+		clip_exec(m_view[CENTER].ctx->dir->path);
+	}
+
+}
+
+/* File search, both forwards and backwards */
+void
+filesearch(const Arg *arg)
+{
+	static int file_idx;
+	static char fname[MAXSEARCHLEN+1];
+	char *fullpath;
+	Direntry *dir = m_view[CENTER].ctx->dir;
+
+	if (arg->i == 0) {      /* Ask for a new filename only if i==0 */
+		dialog(m_view[BOT].win, fname, "/");
+	}
+
+	/* Search for the file */
+	file_idx = fuzzy_file_idx(dir, fname, dir->sel_idx+1);
+
+	/* If a match has been found, update the right pane and repaint it, checking
+	 * whether the selected file is a directory */
+	if (file_idx > 0) {
+		dir->sel_idx = file_idx;
+		if (S_ISDIR(dir->tree[dir->sel_idx]->mode)) {
+			fullpath = join_path(dir->path, dir->tree[dir->sel_idx]->name);
+			init_pane_with_path(m_view[RIGHT].ctx, fullpath);
+			free(fullpath);
+		} else {
+			init_pane_with_path(m_view[RIGHT].ctx, NULL);
+		}
+		render_tree(m_view + RIGHT, 0);
+		render_tree(m_view + CENTER, 1);
+	}
+}
+
+void
+link_cur(const Arg *arg)
+{
+	clip_change_op(OP_LINK);
+	paste_cur(NULL);
+}
+
+/* Make a directory in the current path */
+void
+makedir(const Arg *arg)
+{
+	char name[NAME_MAX+1];
+
+	dialog(m_view[BOT].win, name, "mkdir: ");
+	if (name[0]) {
+		file_mkdir(name, m_view[CENTER].ctx->dir->path);
+	}
+
+	rescan_pane(m_view[CENTER].ctx);
+	render_tree(m_view + CENTER, 1);
 }
 
 /* Handle navigation, either forward or backwards, through directories or
@@ -394,12 +393,28 @@ toggle_hidden(const Arg *arg)
 	queue_master_update();
 }
 
+void
+touch(const Arg *arg)
+{
+	char name[NAME_MAX+1];
+
+	dialog(m_view[BOT].win, name, "touch: ");
+	if (name[0]) {
+		file_touch(name, m_view[CENTER].ctx->dir->path);
+	}
+
+	rescan_pane(m_view[CENTER].ctx);
+	render_tree(m_view + CENTER, 1);
+}
+
 /* Toggle visual selection mode */
 void
 visualmode_toggle(const Arg *arg)
 {
+	if (!m_view[CENTER].ctx->visual) {
+		m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected = 1;
+	}
 	m_view[CENTER].ctx->visual ^= 1;
-	m_view[CENTER].ctx->dir->tree[m_view[CENTER].ctx->dir->sel_idx]->selected ^= 1;
 	render_tree(m_view + CENTER, 1);
 }
 
@@ -427,18 +442,23 @@ direct_cd(char *path)
 	struct stat st;
 
 	status = 0;
-
 	if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
-		status |= init_pane_with_path(m_view[CENTER].ctx, path);
+		init_pane_with_path(m_view[CENTER].ctx, path);
 		fullpath = join_path(path, m_view[CENTER].ctx->dir->tree[0]->name);
-		status |= init_pane_with_path(m_view[RIGHT].ctx, fullpath);
+
+		if (S_ISDIR(m_view[CENTER].ctx->dir->tree[0]->mode)) {
+			init_pane_with_path(m_view[RIGHT].ctx, fullpath);
+		} else {
+			init_pane_with_path(m_view[RIGHT].ctx, NULL);
+		}
+
 		for (i = strlen(fullpath); fullpath[i] != '/' && i > 0; i--)
 			;
 		for (i--; fullpath[i] != '/' && i > 0; i--)
 			;
 		fullpath[i+1] = '\0';
 
-		status |= init_pane_with_path(m_view[LEFT].ctx, fullpath);
+		init_pane_with_path(m_view[LEFT].ctx, fullpath);
 		free(fullpath);
 
 		status |= render_tree(m_view + LEFT, 0);
@@ -467,9 +487,7 @@ enter_directory()
 		status = 1;
 	} else {
 		assert(!navigate_fwd(m_view[LEFT].ctx, m_view[CENTER].ctx, m_view[RIGHT].ctx));
-		/* Update the top and bottom bars to reflect the change in the center
-		 * window, then refresh the main views. The two bar-windows are updated
-		 * every time something happens anyway in the main control loop */
+
 		status |= associate_dir(m_view[TOP].ctx, m_view[CENTER].ctx->dir);
 		status |= associate_dir(m_view[BOT].ctx, m_view[CENTER].ctx->dir);
 		status |= render_tree(m_view + LEFT, 0);
@@ -608,8 +626,11 @@ xdg_open(Direntry *dir)
 	/* Extract the file extension, if one exists. Has to work from the end of
 	 * the string backwards so that the very last '.' is considered the
 	 * extension delimiter */
-	for (ext = fname + strlen(fname); *ext != '.' && ext != fname; ext--)
-		;
+	for (ext = fname + strlen(fname); *ext != '.'; ext--) {
+		if (ext == fname || *ext == '/') {
+			break;
+		}
+	}
 
 	/* If the file has an extension, check if it's already associated to a
 	 * command to run */
@@ -628,6 +649,11 @@ xdg_open(Direntry *dir)
 		dialog(m_view[BOT].win, cmd, "open_with: ");
 	}
 
+	/* cmd[0] == '\0' means that the user didn't input anything */
+	if (!cmd[0]) {
+		return;
+	}
+
 	/* Leave curses mode */
 	def_prog_mode();
 	endwin();
@@ -637,13 +663,14 @@ xdg_open(Direntry *dir)
 		exit(execlp(cmd, cmd, fname, NULL));
 	}
 
+	/* Wait for it to terminate */
 	do {
 		waitpid(pid, &wstatus, 0);
 	} while (!WIFEXITED(wstatus));
 
 	free(fname);
 
-	/* Restore curses mode */
+	/* Re-enter curses mode */
 	reset_prog_mode();
 
 	/* Issue warning if the subprocess exited with an error status */
@@ -652,6 +679,7 @@ xdg_open(Direntry *dir)
 		       "Subprocess exited with status %d", WEXITSTATUS(wstatus));
 	}
 
+	/* Refresh all windows */
 	for (i=0; i<WIN_NR; i++) {
 		wrefresh(m_view[i].win);
 	}
@@ -678,11 +706,11 @@ main(int argc, char *argv[])
 	init_colors();
 
 	getmaxyx(stdscr, max_row, max_col);
-
 	windows_init(m_view, max_row, max_col, pane_proportions);
 	keypad(m_view[BOT].win, TRUE);
-	fileops_init();
 
+	/* Initialize windows with the current path */
+	fileops_init();
 	path = realpath(".", NULL);
 	tabctx_append(path);
 	free(path);

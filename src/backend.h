@@ -22,7 +22,7 @@ typedef struct {
 
 int  associate_dir(PaneCtx *ctx, Direntry *direntry);
 int  free_pane(PaneCtx *ctx);
-int  init_pane_with_path(PaneCtx *ctx, const char *path);
+void init_pane_with_path(PaneCtx *ctx, const char *path);
 int  navigate_fwd(PaneCtx *left, PaneCtx *center, PaneCtx *right);
 int  navigate_back(PaneCtx *left, PaneCtx *center, PaneCtx *right);
 int  recheck_offset(PaneCtx *ctx, int nr);

@@ -147,10 +147,8 @@ pthr_clip_exec(void *arg)
 	pthread_mutex_unlock(&pr->mutex);
 
 	/* Execute whatever the clipboard is holding, on every file the clipboard is
-	 * holding. Yes, I could have done a single for loop; No, I don't think this
-	 * is bad. I'm actually reading clip->op only once instead of doing so in
-	 * every loop */
-	if (clip->dir) {
+	 * holding. Yes, I could have done a single for loop, whatever */
+	 if (clip->dir) {
 		switch(clip->op) {
 		case OP_COPY:
 			for (i=0; i<clip->dir->count; i++) {

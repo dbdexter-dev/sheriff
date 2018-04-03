@@ -23,50 +23,18 @@ atoo(const char *str)
 	return octal;
 }
 
-/* Die atrociously when something bad happens */
-void
-die(const char *msg)
+char*
+extract_filename(const char *path)
 {
-	fprintf(stderr, "[FATAL]: %s >.<\n", msg);
-	exit(1);
-}
+	char *ret;
 
-/* Compress a string, truncating like the fish shell does as a default */
-void
-fish_trunc(char *str)
-{
-	int i, last_slash;
-	char *truncd;
-
-	if (!str || str[0] == '\0' || str[1] == '\0') {
-		return;
-	}
-
-	/* There's a trailing slash most of the time */
-	last_slash = strlen(str) - 2;
-	for (; str[last_slash] != '/' && last_slash > 0; last_slash--)
-		;
-
-	truncd=str;
-	i=0;
-
-	while (i < last_slash) {
-		*(truncd++) = str[i++];
-		*(truncd++) = str[i];
-
-		if (str[i++] == '.') {
-			*(truncd++) = str[i++];
+	for (ret = (char*)(path + strlen(path) - 1); ret >= path; ret--) {
+		if (*ret == '/') {
+			return ret+1;
 		}
-
-		for (; str[i] != '/' && i < last_slash; i++)
-			;
 	}
 
-	for (; str[i] != '\0'; i++) {
-		*(truncd++) = str[i];
-	}
-
-	*(truncd) = '\0';
+	return NULL;
 }
 
 /* Check if a directory is "." or ".." more efficiently than calling strcmp
@@ -193,17 +161,54 @@ tohuman(unsigned long bytes, char *human)
 	if (bytes < 1000) {
 		sprintf(human, "%lu %c", bytes, suffix[0]);
 	} else {
-		/* Integer divide until the last moment */
 		for (exp_3 = 0, fbytes = bytes; fbytes > 1000; fbytes /= 1000, exp_3++)
 			;
-		if (fbytes >= 100) {
+		if (fbytes > 99.9) {
 			sprintf(human, "%3.f %c", fbytes, suffix[exp_3]);
-		} else if (fbytes >= 10) {
+		} else if (fbytes > 9.99) {
 			sprintf(human, "%3.1f %c", fbytes, suffix[exp_3]);
 		} else {
 			sprintf(human, "%3.2f %c", fbytes, suffix[exp_3]);
 		}
 	}
+}
+
+/* Compress a string, truncating like the fish shell does as a default */
+void
+zip_path(char *str)
+{
+	int i, last_slash;
+	char *truncd;
+
+	if (!str || str[0] == '\0' || str[1] == '\0') {
+		return;
+	}
+
+	/* There's a trailing slash most of the time */
+	last_slash = strlen(str) - 2;
+	for (; str[last_slash] != '/' && last_slash > 0; last_slash--)
+		;
+
+	truncd=str;
+	i=0;
+
+	while (i < last_slash) {
+		*(truncd++) = str[i++];
+		*(truncd++) = str[i];
+
+		if (str[i++] == '.') {
+			*(truncd++) = str[i++];
+		}
+
+		for (; str[i] != '/' && i < last_slash; i++)
+			;
+	}
+
+	for (; str[i] != '\0'; i++) {
+		*(truncd++) = str[i];
+	}
+
+	*(truncd) = '\0';
 }
 
 /* Static functions {{{*/

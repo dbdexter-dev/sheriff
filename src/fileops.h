@@ -12,6 +12,8 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+#define MODE_DEFAULT 0755
+
 typedef struct {
 	char *fname;
 	unsigned obj_count;
@@ -29,5 +31,8 @@ int  copy_file(char *src, char *dest);
 int  delete_file(char *name);
 int  link_file(char *src, char *dest);
 int  move_file(char *src, char *dest);
+
+int  file_mkdir(const char *name, const char *path);
+int  file_touch(const char *name, const char *path);
 
 #endif
